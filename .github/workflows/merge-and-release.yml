@@ -12,6 +12,8 @@ on:
 jobs:
   on-success:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     container:
       image: ghcr.io/riscv/riscv-docs-base-container-image:latest
 
