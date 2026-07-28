@@ -6,6 +6,7 @@
 
 attributes_path = File.join(__dir__, "..", "src", "instruction-encoding-allocations.adoc")
 instructions_path = File.join(__dir__, "..", "src", "instructions.adoc")
+instructions_source = File.read(instructions_path)
 
 attributes = {}
 File.foreach(attributes_path) do |line|
@@ -95,9 +96,17 @@ abort "unused managed encoding attributes: #{unused.sort.join(', ')}" unless unu
 
 # Keep the Chapter 2 instruction list authoritative for classification and
 # guarantee that every detailed instruction appears in exactly one list.
+unallocated_names = []
+instructions_source.scan(/^=== `([^`]+)`\n(.*?)(?=^=== `|\z)/m) do |name, section|
+  next unless section.include?("This specification does not assign an instruction encoding.")
+
+  abort "#{name} is marked unallocated but has an encoding diagram" if section.include?('{"reg":')
+  unallocated_names << name
+end
+
 category_by_instruction = {}
 current_category = nil
-File.read(instructions_path).split("\n<<<\n", 2).first.each_line do |line|
+instructions_source.split("\n<<<\n", 2).first.each_line do |line|
   heading = line.match(/^(.+)::$/)
   current_category = heading[1] if heading
   mnemonic = line.match(/^a\| `([^\s`]+)/)
@@ -107,7 +116,7 @@ File.read(instructions_path).split("\n<<<\n", 2).first.each_line do |line|
 
   category_by_instruction[mnemonic[1]] = current_category
 end
-detailed_names = entries.map { |entry| entry[:name] }
+detailed_names = entries.map { |entry| entry[:name] } + unallocated_names
 missing_categories = detailed_names - category_by_instruction.keys
 extra_categories = category_by_instruction.keys - detailed_names
 abort "instructions missing from Chapter 2 categories: #{missing_categories.join(', ')}" unless missing_categories.empty?
@@ -136,7 +145,7 @@ end
 # Decode Variables block.  Collision checking alone cannot detect a diagram
 # that assigns an operand to different bits than the pseudocode reads.
 field_errors = []
-File.read(instructions_path).scan(/^=== `([^`]+)`\n(.*?)(?=^=== `|\z)/m) do |name, section|
+instructions_source.scan(/^=== `([^`]+)`\n(.*?)(?=^=== `|\z)/m) do |name, section|
   diagram = section.lines.find { |line| line.start_with?('{"reg":') }
   next unless diagram
 

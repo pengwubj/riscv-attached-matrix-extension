@@ -1,0 +1,58 @@
+[[shared-ame-backend]]
+== Shared AME Backend
+:imagesdir: ../images
+
+An AME backend contains the AME execution resources and architectural context
+state. A backend may be shared by multiple harts.
+
+Base AME treats the entire backend as one indivisible resource. A software
+execution context owns either the whole backend or none of it; AME exposes no
+subset ownership. At most one context may own a backend at a time.
+
+[[ame-backend-ownership]]
+=== Ownership
+
+The read-only `ameown.OWNED` field reports whether the current context owns the
+backend. `ame.acquire` requests ownership and `ame.release` relinquishes it.
+Ownership is granted atomically.
+
+Before an AME instruction other than `ame.acquire` or `ame.release` executes,
+AME must be enabled by every applicable `MS` field and `ameown.OWNED` must be
+one. Otherwise, the instruction raises an illegal-instruction exception before
+any other AME instruction validation.
+
+Access to writable AME context CSRs has the same enablement and ownership
+requirements. The `ameown` CSR may be read regardless of `MS` or ownership.
+
+[[ame-backend-ms]]
+=== Interaction with `MS`
+
+For non-virtualized execution, `mstatus.MS` is applicable. When `V=1`, both
+`mstatus.MS` and `vsstatus.MS` are applicable. AME is enabled only when every
+applicable field is non-Off.
+
+An `ame.acquire` that newly grants ownership binds architectural initial state
+to the current context and sets every applicable `MS` field to Initial. A
+repeated acquire by the owner preserves the bound state and all `MS` fields.
+
+An AME operation that changes, or might change, bound context state changes
+every applicable `MS` field to Dirty. `ameown` is ownership state and does not
+affect dirty-state tracking.
+
+After `ame.release` relinquishes an owned backend, every applicable non-Off
+`MS` field is Initial. `MS` alone does not grant backend access.
+
+[[ame-backend-context-switch]]
+=== OS context switch
+
+When switching out a context with `ameown.OWNED=1`, software saves Dirty AME
+context state if required, records whether the context is Initial or has a
+saved state image, and executes `ame.release`. The release completes earlier
+AME state-save stores before ownership is relinquished. The `ameown` CSR is not
+saved as a restorable CSR.
+
+Before a saved context resumes AME execution, software enables `MS`, reacquires
+the backend, restores saved AME context state, and sets `MS` to Clean. A context
+without saved AME state may use the initial state supplied by `ame.acquire` and
+leave `MS` Initial. Dependent AME execution must not resume until acquisition
+and any required restore complete.

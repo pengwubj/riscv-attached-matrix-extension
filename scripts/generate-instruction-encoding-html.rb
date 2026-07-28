@@ -35,9 +35,17 @@ instructions_source.split("\n<<<\n", 2).first.each_line do |line|
 end
 
 entries = []
+unallocated_names = []
 instructions_source.scan(/^=== `([^`]+)`\n(.*?)(?=^=== `|\z)/m) do |name, section|
   diagram = section.lines.find { |line| line.start_with?('{"reg":') }
-  abort "#{name} has no WaveDrom encoding" unless diagram
+  unless diagram
+    if section.include?("This specification does not assign an instruction encoding.")
+      unallocated_names << name
+      next
+    end
+
+    abort "#{name} has no WaveDrom encoding"
+  end
 
   mnemonic = section[/Mnemonic::\n`([^`]+)`/, 1]
   synopsis = section[/Synopsis::\n([^\n]+)/, 1].to_s.strip
@@ -79,7 +87,7 @@ instructions_source.scan(/^=== `([^`]+)`\n(.*?)(?=^=== `|\z)/m) do |name, sectio
                mask: mask, value: match_value, format: format, category: category }
 end
 
-extra_classifications = category_by_instruction.keys - entries.map { |entry| entry[:name] }
+extra_classifications = category_by_instruction.keys - entries.map { |entry| entry[:name] } - unallocated_names
 abort "Chapter 2 classifies unknown instructions: #{extra_classifications.join(', ')}" unless extra_classifications.empty?
 
 overlaps = entries.combination(2).select do |left, right|

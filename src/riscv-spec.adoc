@@ -79,6 +79,10 @@ include::programming_model.adoc[]
 
 <<<
 
+include::shared_backend.adoc[]
+
+<<<
+
 include::state.adoc[]
 
 <<<

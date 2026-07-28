@@ -6,6 +6,59 @@
 
 
 
+[#ame:doc:func:ame_effective_ms_enabled]
+=== `ame_effective_ms_enabled` (builtin)
+Returns true when every `MS` field applicable to the current execution context
+is non-Off.
+
+|===
+h| Return Type l| Boolean
+h| Arguments   l|
+|===
+
+
+[#ame:doc:func:ame_check_state_access]
+=== `ame_check_state_access`
+Raises an illegal-instruction exception unless AME is enabled and the current
+execution context owns the backend.
+
+|===
+h| Return Type l| void
+h| Arguments   l| Bits<INSTR_ENC_SIZE> encoding
+|===
+
+[subs="specialchars,macros"]
+----
+if pass:[(]!<<ame:doc:func:ame_effective_ms_enabled,ame_effective_ms_enabled>>pass:[(]) ||
+    CSR[<<ame:doc:csr:ameown,ameown>>].OWNED == 1'b0) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), encoding);
+}
+----
+
+
+[#ame:doc:func:ame_acquire_backend]
+=== `ame_acquire_backend` (builtin)
+Implements the atomic ownership request, descriptor validation, wait policy,
+response construction, initial-state binding, and `MS` updates defined by
+`<<ame:doc:inst:ame_acquire,ame.acquire>>`.
+
+|===
+h| Return Type l| XReg
+h| Arguments   l| XReg descriptor
+|===
+
+
+[#ame:doc:func:ame_release_backend]
+=== `ame_release_backend` (builtin)
+Implements the completion, unbinding, ownership release, and `MS` updates
+defined by `<<ame:doc:inst:ame_release,ame.release>>`.
+
+|===
+h| Return Type l| void
+h| Arguments   l|
+|===
+
+
 [#ame:doc:func:ame_datatype_supported]
 === `ame_datatype_supported` (builtin)
 Returns true if dtype is a supported datatype, false otherwise.

@@ -11,9 +11,9 @@
 === Provisional encoding registry
 
 The encodings are provisional until the extension receives a stable RISC-V
-allocation.  Every instruction nevertheless has a unique decode value so
-that assemblers, decoders, and executable models can distinguish all current
-operations.
+allocation. The registry assigns unique decode values to the 122 encoded
+instructions. `ame.acquire` and `ame.release` are excluded until their
+encodings are assigned.
 
 All AME register instructions retain the standard R-type selector skeleton:
 `funct7[31:25]`, `funct3[14:12]`, and `opcode[6:0]`.  A format with fewer
@@ -51,7 +51,8 @@ minimizes use of the shared `funct7` namespace.
 | Unallocated | 0 | `0x54..0x7f` | n/a | 44 `funct7` banks
 |===
 
-Within each format, operation numbers follow the order of the instruction
-categories and lists at the beginning of this chapter.  The generated
-`INSTRUCTION_ENCODINGS.md` and `INSTRUCTION_ENCODINGS.html` files contain the
-complete per-instruction `funct7`, `xfunct`, mask, and match values.
+Within each format, operation numbers follow the order of the encoded
+instructions in the category lists at the beginning of this chapter. The
+generated `INSTRUCTION_ENCODINGS.md` and `INSTRUCTION_ENCODINGS.html` files
+contain the complete `funct7`, `xfunct`, mask, and match values for those
+instructions.
