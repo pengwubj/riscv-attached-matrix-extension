@@ -3,9 +3,9 @@
 // the complete per-instruction allocation in instructions.adoc.
 
 :ame-enc-funct3: 0x0
-:ame-enc-r2-bank0-funct7: 0x51
-:ame-enc-r2-bank1-funct7: 0x52
-:ame-enc-r1-bank-funct7: 0x53
+:ame-enc-r2-bank0-funct7: 0x55
+:ame-enc-r2-bank1-funct7: 0x56
+:ame-enc-r1-bank-funct7: 0x57
 
 [discrete]
 === Provisional encoding registry
@@ -44,11 +44,11 @@ minimizes use of the shared `funct7` namespace.
 |===
 | Format | Instruction count | `funct7` allocation | Extension allocation | Remaining capacity
 
-| R3 | 80 | `0x00..0x50` except `0x35` | n/a | 1 reserved value
+| R3 | 84 | `0x00..0x53` except `0x35` | n/a | 1 reserved value
 | R2 bank 0 | 31 | `{ame-enc-r2-bank0-funct7}` | `xfunct5=0..31` except `0x09` | 1 reserved value
 | R2 bank 1 | 9 | `{ame-enc-r2-bank1-funct7}` | `xfunct5=0..8` | 23
 | R1 | 2 | `{ame-enc-r1-bank-funct7}` | `xfunct10=0..1` | 1022
-| Unallocated | 0 | `0x54..0x7f` | n/a | 44 `funct7` banks
+| Unallocated | 0 | `0x58..0x7f` | n/a | 40 `funct7` banks
 |===
 
 Within each format, operation numbers follow the order of the encoded

@@ -12,7 +12,7 @@ AME defines *124* instructions.
 ====
 The per-instruction `Operation` blocks below are expanded illustrations of the
 instruction-specific dataflow.  They are interpreted together with the common
-rules in <<_programming_model>>, including operand validation and exception
+rules in <<programming_model>>, including operand validation and exception
 priority, complete register-group formation, `N_sq` logical-square expansion,
 logical element access, and staged atomic register writeback.  When an expanded
 block shows a one-square loop or direct per-register indexing, the common rules
@@ -286,12 +286,20 @@ a| `mls.cm md, xs1`
 | <<ame:doc:inst:mls_cm,Load square from column-major format>>
 a| `mls.rm md, xs1`
 | <<ame:doc:inst:mls_rm,Load square from row-major format>>
+a| `mls.st md, (xs1), xs2`
+| <<ame:doc:inst:mls_st,Load square from strided memory format>>
+a| `mls.tst md, (xs1), xs2`
+| <<ame:doc:inst:mls_tst,Load square from transposed strided memory format>>
 a| `mss ms1, xs1`
 | <<ame:doc:inst:mss,Store raw M register in implementation-defined format>>
 a| `mss.cm ms1, xs1`
 | <<ame:doc:inst:mss_cm,Store square to column-major format>>
 a| `mss.rm ms1, xs1`
 | <<ame:doc:inst:mss_rm,Store square to row-major format>>
+a| `mss.st ms1, (xs1), xs2`
+| <<ame:doc:inst:mss_st,Store square to strided memory format>>
+a| `mss.tst ms1, (xs1), xs2`
+| <<ame:doc:inst:mss_tst,Store square to transposed strided memory format>>
 !===
 
 State Management::
@@ -4385,6 +4393,194 @@ if pass:[(]address % alignment != 0) {
 }
 Bits<AME_MAX_SQUARE_SIZE> tmp = <<ame:doc:func:read_memory_ame,read_memory_ame>>pass:[(]address, $encoding, total_bytes);
 Bits<AME_MAX_SQUARE_SIZE> impl = <<ame:doc:func:ame_xform_rm_to_impl,ame_xform_rm_to_impl>>pass:[(]tmp, dtype);
+for pass:[(]U32 regno = 0; regno < group_size; regno++) {
+  U32 bit_lo = regno * AME_MATRIX_REGISTER_SIZE;
+  U32 bit_hi = bit_lo pass:[+] AME_MATRIX_REGISTER_SIZE - 1;
+  M[md pass:[+] regno] = impl[bit_hi:bit_lo];
+}
+}
+----
+
+
+<<<
+
+[#ame:doc:inst:mls_st]
+=== `mls.st`
+
+Synopsis::
+Load square from strided memory format
+
+Mnemonic::
+`mls.st md, (xs1), xs2`
+
+Encoding::
++
+[IMPORTANT]
+This encoding is provisional and is not a final RISC-V allocation.
++
+[wavedrom, ,svg,subs='attributes',width="100%"]
+....
+{"reg":[{"bits":7,"name": 0x2b,"type":2},{"bits":5,"name": "md","type":4},{"bits":3,"name": {ame-enc-funct3},"type":2},{"bits":5,"name": "xs1","type":4},{"bits":5,"name": "xs2","type":4},{"bits":7,"name": 0x51,"type":2}]}
+....
+
+Description::
+Loads a square from memory in strided format into matrix register `md`.
++
+The datatype is determined from `Md[md]`. For compute datatypes
+(size >= `AME_UNIT_DATATYPE_SIZE`), one square is loaded. For packed datatypes
+(size < `AME_UNIT_DATATYPE_SIZE`), `pack_factor = AME_UNIT_DATATYPE_SIZE / sizeof(Md[md])`
+squares are loaded and packed into a single M register.
++
+The strided load accesses memory as a sequence of equally spaced segments, one segment per
+row of the square. Each segment contains `sqrt(AME_NELEM)` contiguous elements, and
+consecutive segments are separated by a byte stride supplied in integer register `xs2`.
+Element `j` of row `i` is loaded from address
+`base + i * stride + j * sizeof(Md[md])`.
++
+The address must be aligned to the element size (`sizeof(Md[md])`) or 4KB,
+whichever is smaller. Otherwise, `mls.st` raises a `Load Misaligned` exception.
+
+
+
+Decode Variables::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<5> md = $encoding[11:7];
+Bits<5> xs1 = $encoding[19:15];
+Bits<5> xs2 = $encoding[24:20];
+----
+
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+XReg address = X[xs1];
+XReg stride = X[xs2];
+if pass:[(]AME_NUM_M_REGS == 16) {
+  if pass:[(]md >= 16) {
+    <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+  }
+}
+Bits<32> dtype = Md[md];
+if pass:[(]!<<ame:doc:func:ame_datatype_supported,ame_datatype_supported>>pass:[(]dtype)) {
+  CSR[<<ame:doc:csr:amestatus,amestatus>>].<<ame:doc:csr_field:amestatus:UN,UN>> = 1;
+} else {
+U32 element_size_bits = <<ame:doc:func:ame_dtype_val_to_size,ame_dtype_val_to_size>>pass:[(]dtype);
+U32 pack_factor = <<ame:doc:func:ame_dtype_is_packed,ame_dtype_is_packed>>pass:[(]dtype) ? (AME_UNIT_DATATYPE_SIZE / element_size_bits) : 1;
+U32 group_size = (element_size_bits pass:[+] AME_UNIT_DATATYPE_SIZE - 1) / AME_UNIT_DATATYPE_SIZE;
+if pass:[(](md % group_size) != 0 || (md pass:[+] group_size) > AME_NUM_M_REGS) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 sqrt_nelem = sqrt(AME_NELEM);
+XReg element_bytes = (element_size_bits pass:[+] 7) / 8;
+XReg seg_bytes = sqrt_nelem * element_bytes;
+XReg alignment = <<ame:doc:func:min,min>>pass:[(]element_bytes, 4096);
+if pass:[(]address % alignment != 0) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::LoadAddressMisaligned, <<ame:doc:func:mode,mode>>pass:[(]), address);
+}
+Bits<AME_MAX_SQUARE_SIZE> tmp = 0;
+for pass:[(]U32 seg = 0; seg < pack_factor * sqrt_nelem; seg++) {
+  XReg seg_addr = address pass:[+] seg * stride;
+  Bits<AME_MAX_SQUARE_SIZE> seg_data = <<ame:doc:func:read_memory_ame,read_memory_ame>>pass:[(]seg_addr, $encoding, seg_bytes);
+  U32 bit_lo = seg * sqrt_nelem * element_size_bits;
+  U32 bit_hi = bit_lo pass:[+] sqrt_nelem * element_size_bits - 1;
+  tmp[bit_hi:bit_lo] = seg_data[sqrt_nelem * element_size_bits - 1 : 0];
+}
+Bits<AME_MAX_SQUARE_SIZE> impl = <<ame:doc:func:ame_xform_rm_to_impl,ame_xform_rm_to_impl>>pass:[(]tmp, dtype);
+for pass:[(]U32 regno = 0; regno < group_size; regno++) {
+  U32 bit_lo = regno * AME_MATRIX_REGISTER_SIZE;
+  U32 bit_hi = bit_lo pass:[+] AME_MATRIX_REGISTER_SIZE - 1;
+  M[md pass:[+] regno] = impl[bit_hi:bit_lo];
+}
+}
+----
+
+
+<<<
+
+[#ame:doc:inst:mls_tst]
+=== `mls.tst`
+
+Synopsis::
+Load square from transposed strided memory format
+
+Mnemonic::
+`mls.tst md, (xs1), xs2`
+
+Encoding::
++
+[IMPORTANT]
+This encoding is provisional and is not a final RISC-V allocation.
++
+[wavedrom, ,svg,subs='attributes',width="100%"]
+....
+{"reg":[{"bits":7,"name": 0x2b,"type":2},{"bits":5,"name": "md","type":4},{"bits":3,"name": {ame-enc-funct3},"type":2},{"bits":5,"name": "xs1","type":4},{"bits":5,"name": "xs2","type":4},{"bits":7,"name": 0x52,"type":2}]}
+....
+
+Description::
+Loads a square from memory in transposed strided format into matrix register `md`.
++
+The datatype is determined from `Md[md]`. For compute datatypes
+(size >= `AME_UNIT_DATATYPE_SIZE`), one square is loaded. For packed datatypes
+(size < `AME_UNIT_DATATYPE_SIZE`), `pack_factor = AME_UNIT_DATATYPE_SIZE / sizeof(Md[md])`
+squares are loaded and packed into a single M register.
++
+The transposed strided load accesses memory as a sequence of equally spaced segments,
+one segment per column of the square. Each segment contains `sqrt(AME_NELEM)` contiguous
+elements, and consecutive segments are separated by a byte stride supplied in integer
+register `xs2`. Element `(i,j)` of the register square is loaded from address
+`base + j * stride + i * sizeof(Md[md])`, transposing the square during the transfer.
++
+The address must be aligned to the element size (`sizeof(Md[md])`) or 4KB,
+whichever is smaller. Otherwise, `mls.tst` raises a `Load Misaligned` exception.
+
+
+
+Decode Variables::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<5> md = $encoding[11:7];
+Bits<5> xs1 = $encoding[19:15];
+Bits<5> xs2 = $encoding[24:20];
+----
+
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+XReg address = X[xs1];
+XReg stride = X[xs2];
+if pass:[(]AME_NUM_M_REGS == 16) {
+  if pass:[(]md >= 16) {
+    <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+  }
+}
+Bits<32> dtype = Md[md];
+if pass:[(]!<<ame:doc:func:ame_datatype_supported,ame_datatype_supported>>pass:[(]dtype)) {
+  CSR[<<ame:doc:csr:amestatus,amestatus>>].<<ame:doc:csr_field:amestatus:UN,UN>> = 1;
+} else {
+U32 element_size_bits = <<ame:doc:func:ame_dtype_val_to_size,ame_dtype_val_to_size>>pass:[(]dtype);
+U32 pack_factor = <<ame:doc:func:ame_dtype_is_packed,ame_dtype_is_packed>>pass:[(]dtype) ? (AME_UNIT_DATATYPE_SIZE / element_size_bits) : 1;
+U32 group_size = (element_size_bits pass:[+] AME_UNIT_DATATYPE_SIZE - 1) / AME_UNIT_DATATYPE_SIZE;
+if pass:[(](md % group_size) != 0 || (md pass:[+] group_size) > AME_NUM_M_REGS) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 sqrt_nelem = sqrt(AME_NELEM);
+XReg element_bytes = (element_size_bits pass:[+] 7) / 8;
+XReg seg_bytes = sqrt_nelem * element_bytes;
+XReg alignment = <<ame:doc:func:min,min>>pass:[(]element_bytes, 4096);
+if pass:[(]address % alignment != 0) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::LoadAddressMisaligned, <<ame:doc:func:mode,mode>>pass:[(]), address);
+}
+Bits<AME_MAX_SQUARE_SIZE> tmp = 0;
+for pass:[(]U32 seg = 0; seg < pack_factor * sqrt_nelem; seg++) {
+  XReg seg_addr = address pass:[+] seg * stride;
+  Bits<AME_MAX_SQUARE_SIZE> seg_data = <<ame:doc:func:read_memory_ame,read_memory_ame>>pass:[(]seg_addr, $encoding, seg_bytes);
+  U32 bit_lo = seg * sqrt_nelem * element_size_bits;
+  U32 bit_hi = bit_lo pass:[+] sqrt_nelem * element_size_bits - 1;
+  tmp[bit_hi:bit_lo] = seg_data[sqrt_nelem * element_size_bits - 1 : 0];
+}
+Bits<AME_MAX_SQUARE_SIZE> impl = <<ame:doc:func:ame_xform_cm_to_impl,ame_xform_cm_to_impl>>pass:[(]tmp, dtype);
 for pass:[(]U32 regno = 0; regno < group_size; regno++) {
   U32 bit_lo = regno * AME_MATRIX_REGISTER_SIZE;
   U32 bit_hi = bit_lo pass:[+] AME_MATRIX_REGISTER_SIZE - 1;
@@ -11384,6 +11580,192 @@ for pass:[(]U32 regno = 0; regno < group_size; regno++) {
 }
 Bits<AME_MAX_SQUARE_SIZE> tmp = <<ame:doc:func:ame_xform_impl_to_rm,ame_xform_impl_to_rm>>pass:[(]impl, dtype);
 <<ame:doc:func:write_memory_ame,write_memory_ame>>pass:[(]address, $encoding, tmp, total_bytes);
+}
+----
+
+
+<<<
+
+[#ame:doc:inst:mss_st]
+=== `mss.st`
+
+Synopsis::
+Store square to strided memory format
+
+Mnemonic::
+`mss.st ms1, (xs1), xs2`
+
+Encoding::
++
+[IMPORTANT]
+This encoding is provisional and is not a final RISC-V allocation.
++
+[wavedrom, ,svg,subs='attributes',width="100%"]
+....
+{"reg":[{"bits":7,"name": 0x2b,"type":2},{"bits":5,"name": "ms1","type":4},{"bits":3,"name": {ame-enc-funct3},"type":2},{"bits":5,"name": "xs1","type":4},{"bits":5,"name": "xs2","type":4},{"bits":7,"name": 0x53,"type":2}]}
+....
+
+Description::
+Stores a square from matrix register `ms1` into memory in strided format.
++
+The datatype is determined from `Md[ms1]`. For compute datatypes
+(size >= `AME_UNIT_DATATYPE_SIZE`), one square is stored. For packed datatypes
+(size < `AME_UNIT_DATATYPE_SIZE`), `pack_factor = AME_UNIT_DATATYPE_SIZE / sizeof(Md[ms1])`
+squares are unpacked from the single M register and stored.
++
+The strided store writes memory as a sequence of equally spaced segments, one segment per
+row of the square. Each segment contains `sqrt(AME_NELEM)` contiguous elements, and
+consecutive segments are separated by a byte stride supplied in integer register `xs2`.
+Element `j` of row `i` is written to address
+`base + i * stride + j * sizeof(Md[ms1])`.
++
+The address must be aligned to the element size (`sizeof(Md[ms1])`) or 4KB,
+whichever is smaller. Otherwise, `mss.st` raises a `Store/AMO Misaligned` exception.
+
+
+
+Decode Variables::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<5> ms1 = $encoding[11:7];
+Bits<5> xs1 = $encoding[19:15];
+Bits<5> xs2 = $encoding[24:20];
+----
+
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+XReg address = X[xs1];
+XReg stride = X[xs2];
+if pass:[(]AME_NUM_M_REGS == 16) {
+  if pass:[(]ms1 >= 16) {
+    <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+  }
+}
+Bits<32> dtype = Md[ms1];
+if pass:[(]!<<ame:doc:func:ame_datatype_supported,ame_datatype_supported>>pass:[(]dtype)) {
+  CSR[<<ame:doc:csr:amestatus,amestatus>>].<<ame:doc:csr_field:amestatus:UN,UN>> = 1;
+} else {
+U32 element_size_bits = <<ame:doc:func:ame_dtype_val_to_size,ame_dtype_val_to_size>>pass:[(]dtype);
+U32 pack_factor = <<ame:doc:func:ame_dtype_is_packed,ame_dtype_is_packed>>pass:[(]dtype) ? (AME_UNIT_DATATYPE_SIZE / element_size_bits) : 1;
+U32 group_size = (element_size_bits pass:[+] AME_UNIT_DATATYPE_SIZE - 1) / AME_UNIT_DATATYPE_SIZE;
+if pass:[(](ms1 % group_size) != 0 || (ms1 pass:[+] group_size) > AME_NUM_M_REGS) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 sqrt_nelem = sqrt(AME_NELEM);
+XReg element_bytes = (element_size_bits pass:[+] 7) / 8;
+XReg seg_bytes = sqrt_nelem * element_bytes;
+XReg alignment = <<ame:doc:func:min,min>>pass:[(]element_bytes, 4096);
+if pass:[(]address % alignment != 0) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::StoreAmoAddressMisaligned, <<ame:doc:func:mode,mode>>pass:[(]), address);
+}
+Bits<AME_MAX_SQUARE_SIZE> impl = 0;
+for pass:[(]U32 regno = 0; regno < group_size; regno++) {
+  U32 bit_lo = regno * AME_MATRIX_REGISTER_SIZE;
+  U32 bit_hi = bit_lo pass:[+] AME_MATRIX_REGISTER_SIZE - 1;
+  impl[bit_hi:bit_lo] = M[ms1 pass:[+] regno];
+}
+Bits<AME_MAX_SQUARE_SIZE> tmp = <<ame:doc:func:ame_xform_impl_to_rm,ame_xform_impl_to_rm>>pass:[(]impl, dtype);
+for pass:[(]U32 seg = 0; seg < pack_factor * sqrt_nelem; seg++) {
+  XReg seg_addr = address pass:[+] seg * stride;
+  U32 bit_lo = seg * sqrt_nelem * element_size_bits;
+  U32 bit_hi = bit_lo pass:[+] sqrt_nelem * element_size_bits - 1;
+  <<ame:doc:func:write_memory_ame,write_memory_ame>>pass:[(]seg_addr, $encoding, tmp[bit_hi:bit_lo], seg_bytes);
+}
+}
+----
+
+
+<<<
+
+[#ame:doc:inst:mss_tst]
+=== `mss.tst`
+
+Synopsis::
+Store square to transposed strided memory format
+
+Mnemonic::
+`mss.tst ms1, (xs1), xs2`
+
+Encoding::
++
+[IMPORTANT]
+This encoding is provisional and is not a final RISC-V allocation.
++
+[wavedrom, ,svg,subs='attributes',width="100%"]
+....
+{"reg":[{"bits":7,"name": 0x2b,"type":2},{"bits":5,"name": "ms1","type":4},{"bits":3,"name": {ame-enc-funct3},"type":2},{"bits":5,"name": "xs1","type":4},{"bits":5,"name": "xs2","type":4},{"bits":7,"name": 0x54,"type":2}]}
+....
+
+Description::
+Stores a square from matrix register `ms1` into memory in transposed strided format.
++
+The datatype is determined from `Md[ms1]`. For compute datatypes
+(size >= `AME_UNIT_DATATYPE_SIZE`), one square is stored. For packed datatypes
+(size < `AME_UNIT_DATATYPE_SIZE`), `pack_factor = AME_UNIT_DATATYPE_SIZE / sizeof(Md[ms1])`
+squares are unpacked from the single M register and stored.
++
+The transposed strided store writes memory as a sequence of equally spaced segments,
+one segment per column of the square. Each segment contains `sqrt(AME_NELEM)` contiguous
+elements, and consecutive segments are separated by a byte stride supplied in integer
+register `xs2`. Element `(i,j)` of the register square is written to address
+`base + j * stride + i * sizeof(Md[ms1])`, transposing the square during the transfer.
++
+The address must be aligned to the element size (`sizeof(Md[ms1])`) or 4KB,
+whichever is smaller. Otherwise, `mss.tst` raises a `Store/AMO Misaligned` exception.
+
+
+
+Decode Variables::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<5> ms1 = $encoding[11:7];
+Bits<5> xs1 = $encoding[19:15];
+Bits<5> xs2 = $encoding[24:20];
+----
+
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+XReg address = X[xs1];
+XReg stride = X[xs2];
+if pass:[(]AME_NUM_M_REGS == 16) {
+  if pass:[(]ms1 >= 16) {
+    <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+  }
+}
+Bits<32> dtype = Md[ms1];
+if pass:[(]!<<ame:doc:func:ame_datatype_supported,ame_datatype_supported>>pass:[(]dtype)) {
+  CSR[<<ame:doc:csr:amestatus,amestatus>>].<<ame:doc:csr_field:amestatus:UN,UN>> = 1;
+} else {
+U32 element_size_bits = <<ame:doc:func:ame_dtype_val_to_size,ame_dtype_val_to_size>>pass:[(]dtype);
+U32 pack_factor = <<ame:doc:func:ame_dtype_is_packed,ame_dtype_is_packed>>pass:[(]dtype) ? (AME_UNIT_DATATYPE_SIZE / element_size_bits) : 1;
+U32 group_size = (element_size_bits pass:[+] AME_UNIT_DATATYPE_SIZE - 1) / AME_UNIT_DATATYPE_SIZE;
+if pass:[(](ms1 % group_size) != 0 || (ms1 pass:[+] group_size) > AME_NUM_M_REGS) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 sqrt_nelem = sqrt(AME_NELEM);
+XReg element_bytes = (element_size_bits pass:[+] 7) / 8;
+XReg seg_bytes = sqrt_nelem * element_bytes;
+XReg alignment = <<ame:doc:func:min,min>>pass:[(]element_bytes, 4096);
+if pass:[(]address % alignment != 0) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::StoreAmoAddressMisaligned, <<ame:doc:func:mode,mode>>pass:[(]), address);
+}
+Bits<AME_MAX_SQUARE_SIZE> impl = 0;
+for pass:[(]U32 regno = 0; regno < group_size; regno++) {
+  U32 bit_lo = regno * AME_MATRIX_REGISTER_SIZE;
+  U32 bit_hi = bit_lo pass:[+] AME_MATRIX_REGISTER_SIZE - 1;
+  impl[bit_hi:bit_lo] = M[ms1 pass:[+] regno];
+}
+Bits<AME_MAX_SQUARE_SIZE> tmp = <<ame:doc:func:ame_xform_impl_to_cm,ame_xform_impl_to_cm>>pass:[(]impl, dtype);
+for pass:[(]U32 seg = 0; seg < pack_factor * sqrt_nelem; seg++) {
+  XReg seg_addr = address pass:[+] seg * stride;
+  U32 bit_lo = seg * sqrt_nelem * element_size_bits;
+  U32 bit_hi = bit_lo pass:[+] sqrt_nelem * element_size_bits - 1;
+  <<ame:doc:func:write_memory_ame,write_memory_ame>>pass:[(]seg_addr, $encoding, tmp[bit_hi:bit_lo], seg_bytes);
+}
 }
 ----
 
