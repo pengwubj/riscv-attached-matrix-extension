@@ -898,7 +898,7 @@ h| Arguments   l| AmeOperation op, Bits<32> src1_dtype, Bits<AME_MAX_DTYPE_SIZE>
 |===
 | `AmeOperation` | Mathematical result before destination conversion | Required operand class
 
-| `GATHER1D`, `GATHERROW1D`, `SHIFT1D`, `ROWSHIFT1D`
+| `COLBCAST1D`, `ROWBCAST1D`, `GATHER1D`, `GATHERROW1D`, `SHIFT1D`, `ROWSHIFT1D`
 | `src1`
 | The data source and destination datatypes are identical. Gather index operands are integer datatypes.
 
@@ -995,6 +995,12 @@ destination datatypes
 | Zero in the destination datatype
 | Any supported destination datatype
 
+| `ROWID1D`, `COLID1D`
+| The zero-based row index (`ROWID1D`) or column index (`COLID1D`) of the
+destination element, represented in the destination datatype
+| Any supported integer destination datatype in which the largest index
+`sqrt(AME_NELEM) - 1` is exactly representable
+
 | `SLL1D`
 | `src1 << src2`
 | Integer data and shift-amount datatypes; the data element width is a power of two
@@ -1036,9 +1042,27 @@ For standard integer arithmetic operations, the mathematical result shown in
 the table is evaluated without intermediate truncation and then converted once
 to the destination integer datatype.  A destination with `Saturation=1`
 clamps an out-of-range result; a destination with `Saturation=0` retains the
-low destination-width bits.  Standard integer tuples for `HDIFF1D` and
-`MEAN1D` are unsupported until their non-integral rounding direction is
-specified.  Custom datatype tuples may define their own conversion rule.
+low destination-width bits.  When a destination with `Saturation=1` clamps an
+out-of-range result, the operation also sets
+`CSR[<<ame:doc:csr:mxsat,mxsat>>].<<ame:doc:csr_field:mxsat:SAT,SAT>>`;
+operations that do not saturate their output leave `mxsat` unchanged.
+When the exact intermediate result of a standard integer tuple has fraction
+bits below the LSB of the destination datatype (`HDIFF1D` and `MEAN1D`), the
+result is rounded according to the destination datatype's *Rounding mode*
+field (RNU/RNE/RDN/ROD, see <<datatypes>>) before the conversion above.
+Custom datatype tuples may define their own conversion rule.
+
+Standard floating-point tuples accrue the IEEE exception flags of each
+element operation into `CSR[<<ame:doc:csr:mfflags,mfflags>>]`, using the same
+flag definitions as the `fflags` CSR of the F extension.  AME operations do
+not modify `fflags` itself.
+
+Status-flag updates to `mfflags` and `mxsat` are not architecturally visible
+per element.  They are accumulated in instruction-local staged state and are
+OR-ed into the architectural CSRs only when the instruction completes and its
+staged destination writes commit.  An instruction that raises a synchronous
+exception commits no `mfflags` or `mxsat` update, following the same atomic
+writeback rules as staged register writes.
 
 Floating-point `CMPGE1D` and `CMPLT1D` use ordered IEEE comparisons: a NaN
 operand makes the comparison false, and `-0` compares equal to `+0`.
@@ -1048,7 +1072,10 @@ semantic zero, including its canonical zero sign.
 For `SLL1D`, `SRA1D`, and `SRL1D`, the caller supplies the already-masked
 unsigned shift amount defined by the corresponding instruction.  `ZERO1D`
 returns the datatype's semantic zero; instructions must not assume that its
-encoded representation is an all-zero bit pattern.  Floating-point results
+encoded representation is an all-zero bit pattern.  For `ROWID1D` and
+`COLID1D`, the caller supplies the zero-based index as `src1`; the value is
+represented exactly in the destination datatype, so no rounding or saturation
+occurs.  Floating-point results
 follow the rules below.
 
 [#norm:ame_fp_special_values]

@@ -126,14 +126,14 @@ funct3_values = entries.map { |entry| entry[:funct3] }.uniq
 abort "AME instructions must all use funct3=0, found #{funct3_values.sort.join(', ')}" unless funct3_values == [0]
 
 reserved_funct7 = {
-  "R3" => [0x35],
+  "R3" => [],
   "R2" => [],
   "R1" => []
 }
 expected_funct7 = {
-  "R3" => (0x00..0x54).to_a - reserved_funct7.fetch("R3"),
-  "R2" => [0x55, 0x56],
-  "R1" => [0x57]
+  "R3" => (0x00..0x50).to_a + (0x54..0x60).to_a - reserved_funct7.fetch("R3"),
+  "R2" => [0x51, 0x52],
+  "R1" => [0x53]
 }
 expected_funct7.each do |format_name, expected|
   actual = entries.select { |entry| entry[:format] == format_name }
@@ -202,7 +202,7 @@ end
 # funct7 bank.  This turns the space-saving policy into a checked invariant
 # rather than a documentation preference.
 reserved_extensions = {
-  ["R2", 0x55] => [9]
+  ["R2", 0x51] => [9]
 }
 [["R2", 32], ["R1", 1024]].each do |format_name, capacity|
   entries.select { |entry| entry[:format] == format_name }

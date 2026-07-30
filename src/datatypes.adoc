@@ -31,7 +31,8 @@ RISC-V may introduce future data types that do not follow the current convention
 === Integer datatype class
 
 Integer type properties occupy bits `30:9` when bit 8 is `0`.
-Integer types are distinguished by size/precision, signedness, and saturation behavior.
+Integer types are distinguished by size/precision, signedness, saturation behavior,
+and rounding mode.
 
 |===
 | Position | Field | Values
@@ -48,7 +49,11 @@ Integer types are distinguished by size/precision, signedness, and saturation be
 | Saturation
 | `1` = saturate, `0` - overflow
 
-| `28:9`
+| `28:27`
+| Rounding mode
+| `00` = RNU, `01` = RNE, `10` = RDN, `11` = ROD
+
+| `26:9`
 | (reserved)
 | Must be zero
 
@@ -64,37 +69,77 @@ Integer types are distinguished by size/precision, signedness, and saturation be
 
 Integer types are two's complement binary numbers.
 
+The *Rounding mode* field applies to integer operations whose exact
+mathematical intermediate result has fraction bits below the LSB of the
+destination datatype (for example `MEAN1D` and `HDIFF1D`).  Let `v` be the
+exact intermediate result and `d` the number of fraction bits discarded when
+producing the destination-width integer result.  `v` is treated as a two's
+complement value and `>>` denotes an arithmetic right shift.  When `d == 1`,
+the term `v[d-2:0]` is treated as zero.  The rounded result is
+selected by the destination datatype's rounding mode:
+
+|===
+| Encoding | Mode | Rounded result
+
+| `00`
+| RNU (round-to-nearest-up)
+| `(v >> d) + v[d-1]`
+
+| `01`
+| RNE (round-to-nearest-even)
+| `(v >> d) + r`, where `r = 1` if `v[d-1] == 1` and `(v[d-2:0] != 0 or
+v[d] == 1)`, else `r = 0`
+
+| `10`
+| RDN (round-down, truncate)
+| `v >> d`
+
+| `11`
+| ROD (round-to-odd, jam)
+| `(v >> d) {vbar} (v[d-1:0] != 0)`
+
+|===
+
+Operations whose exact result is already integral are unaffected by the
+rounding mode.  The rounding mode does not apply to floating-point datatypes,
+whose rounding follows the IEEE floating-point class rules.
+
 .Standard Integer Types
 |===
-^| Type 6+^| Encoding
+^| Type 7+^| Encoding
 
-|            h| Custom  h| Sgn   h| Sat  h|  Rsv   h| Int  h|  Size
-|            h| `31` h|  `30` h| `29` h| `28:9` h|  `8` h|    `7:0`
-| Int4        | `0`   | `1`    | `0`   | `0..0`  | `0`   | `00000100`
-| Uint4       | `0`   | `0`    | `0`   | `0..0`  | `0`   | `00000100`
-| Int8        | `0`   | `1`    | `0`   | `0..0`  | `0`   | `00001000`
-| Uint8       | `0`   | `0`    | `0`   | `0..0`  | `0`   | `00001000`
-| Int16       | `0`   | `1`    | `0`   | `0..0`  | `0`   | `00010000`
-| Uint16      | `0`   | `0`    | `0`   | `0..0`  | `0`   | `00010000`
-| Int32       | `0`   | `1`    | `0`   | `0..0`  | `0`   | `00100000`
-| Uint32      | `0`   | `0`    | `0`   | `0..0`  | `0`   | `00100000`
-| Int64       | `0`   | `1`    | `0`   | `0..0`  | `0`   | `01000000`
-| Uint64      | `0`   | `0`    | `0`   | `0..0`  | `0`   | `01000000`
-| Int128      | `0`   | `1`    | `0`   | `0..0`  | `0`   | `10000000`
-| Uint128     | `0`   | `0`    | `0`   | `0..0`  | `0`   | `10000000`
-| Int4_Sat    | `0`   | `1`    | `1`   | `0..0`  | `0`   | `00000100`
-| Uint4_Sat   | `0`   | `0`    | `1`   | `0..0`  | `0`   | `00000100`
-| Int8_Sat    | `0`   | `1`    | `1`   | `0..0`  | `0`   | `00001000`
-| Uint8_Sat   | `0`   | `0`    | `1`   | `0..0`  | `0`   | `00001000`
-| Int16_Sat   | `0`   | `1`    | `1`   | `0..0`  | `0`   | `00010000`
-| Uint16_Sat  | `0`   | `0`    | `1`   | `0..0`  | `0`   | `00010000`
-| Int32_Sat   | `0`   | `1`    | `1`   | `0..0`  | `0`   | `00100000`
-| Uint32_Sat  | `0`   | `0`    | `1`   | `0..0`  | `0`   | `00100000`
-| Int64_Sat   | `0`   | `1`    | `1`   | `0..0`  | `0`   | `01000000`
-| Uint64_Sat  | `0`   | `0`    | `1`   | `0..0`  | `0`   | `01000000`
-| Int128_Sat  | `0`   | `1`    | `1`   | `0..0`  | `0`   | `10000000`
-| Uint128_Sat | `0`   | `0`    | `1`   | `0..0`  | `0`   | `10000000`
+|            h| Custom  h| Sgn   h| Sat  h| Rnd     h|  Rsv   h| Int  h|  Size
+|            h| `31` h|  `30` h| `29` h| `28:27` h| `26:9` h|  `8` h|    `7:0`
+| Int4        | `0`   | `1`    | `0`   | `xx`     | `0..0`  | `0`   | `00000100`
+| Uint4       | `0`   | `0`    | `0`   | `xx`     | `0..0`  | `0`   | `00000100`
+| Int8        | `0`   | `1`    | `0`   | `xx`     | `0..0`  | `0`   | `00001000`
+| Uint8       | `0`   | `0`    | `0`   | `xx`     | `0..0`  | `0`   | `00001000`
+| Int16       | `0`   | `1`    | `0`   | `xx`     | `0..0`  | `0`   | `00010000`
+| Uint16      | `0`   | `0`    | `0`   | `xx`     | `0..0`  | `0`   | `00010000`
+| Int32       | `0`   | `1`    | `0`   | `xx`     | `0..0`  | `0`   | `00100000`
+| Uint32      | `0`   | `0`    | `0`   | `xx`     | `0..0`  | `0`   | `00100000`
+| Int64       | `0`   | `1`    | `0`   | `xx`     | `0..0`  | `0`   | `01000000`
+| Uint64      | `0`   | `0`    | `0`   | `xx`     | `0..0`  | `0`   | `01000000`
+| Int128      | `0`   | `1`    | `0`   | `xx`     | `0..0`  | `0`   | `10000000`
+| Uint128     | `0`   | `0`    | `0`   | `xx`     | `0..0`  | `0`   | `10000000`
+| Int4_Sat    | `0`   | `1`    | `1`   | `xx`     | `0..0`  | `0`   | `00000100`
+| Uint4_Sat   | `0`   | `0`    | `1`   | `xx`     | `0..0`  | `0`   | `00000100`
+| Int8_Sat    | `0`   | `1`    | `1`   | `xx`     | `0..0`  | `0`   | `00001000`
+| Uint8_Sat   | `0`   | `0`    | `1`   | `xx`     | `0..0`  | `0`   | `00001000`
+| Int16_Sat   | `0`   | `1`    | `1`   | `xx`     | `0..0`  | `0`   | `00010000`
+| Uint16_Sat  | `0`   | `0`    | `1`   | `xx`     | `0..0`  | `0`   | `00010000`
+| Int32_Sat   | `0`   | `1`    | `1`   | `xx`     | `0..0`  | `0`   | `00100000`
+| Uint32_Sat  | `0`   | `0`    | `1`   | `xx`     | `0..0`  | `0`   | `00100000`
+| Int64_Sat   | `0`   | `1`    | `1`   | `xx`     | `0..0`  | `0`   | `01000000`
+| Uint64_Sat  | `0`   | `0`    | `1`   | `xx`     | `0..0`  | `0`   | `01000000`
+| Int128_Sat  | `0`   | `1`    | `1`   | `xx`     | `0..0`  | `0`   | `10000000`
+| Uint128_Sat | `0`   | `0`    | `1`   | `xx`     | `0..0`  | `0`   | `10000000`
 |===
+
+The `Rnd` column is shown as `xx` (don't care): each standard integer type
+name denotes the four encodings obtained with the four rounding-mode values.
+These encodings share size, signedness, and saturation behavior, and differ
+only in the rounding of sub-LSB intermediate results.
 
 === IEEE floating-point class
 

@@ -122,10 +122,10 @@ lines << "Every encoding retains `funct7[31:25]`, `funct3[14:12]`, and " \
 lines << ""
 lines << "A `(funct7, funct3, opcode)` bank belongs to only one format. This rule " \
          "prevents a more-specific R1/R2 pattern from being hidden inside an R2/R3 decode."
-lines << "R3 uses `funct7=0x00..0x50` except the reserved value `0x35`. R2 uses " \
+lines << "R3 uses `funct7=0x00..0x50` and `funct7=0x58..0x60`. R2 uses " \
          "`funct7=0x51` with `xfunct5=0..31` except the reserved value `0x09`, " \
          "before continuing at `funct7=0x52`; R1 uses `funct7=0x53` with " \
-         "`xfunct10=0..1`. Values `0x54..0x7f` remain free."
+         "`xfunct10=0..3`. Values `0x54..0x57` and `0x61..0x7f` remain free."
 
 lines << ""
 lines << "## All instruction encodings"

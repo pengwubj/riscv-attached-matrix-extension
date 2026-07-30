@@ -6,7 +6,7 @@
 
 
 
-AME defines *124* instructions.
+AME defines *140* instructions.
 
 [IMPORTANT]
 ====
@@ -191,6 +191,8 @@ Permutation::
 !===
 | Mnemonic | Name
 
+a| `mcolbcast.ew.x md, ms1, xs1`
+| <<ame:doc:inst:mcolbcast_ew_x,Broadcast one column to all columns>>
 a| `mcolgather.ew md, ms1, ms2`
 | <<ame:doc:inst:mcolgather_ew,Elementwise gather (take)>>
 a| `mcolshift.ew.x md, ms1, xs1`
@@ -199,6 +201,8 @@ a| `mcolunzip.ew md, ms1`
 | <<ame:doc:inst:mcolunzip_ew,Elementwise column unzip (de-interleave)>>
 a| `mcolzip.ew md, ms1`
 | <<ame:doc:inst:mcolzip_ew,Elementwise column zip (interleave)>>
+a| `mrowbcast.ew.x md, ms1, xs1`
+| <<ame:doc:inst:mrowbcast_ew_x,Broadcast one row to all rows>>
 a| `mrowgather.ew md, ms1, ms2`
 | <<ame:doc:inst:mrowgather_ew,Elementwise row gather (take)>>
 a| `mrowshift.ew.x md, ms1, xs1`
@@ -222,10 +226,26 @@ Register move / data conversion::
 !===
 | Mnemonic | Name
 
-a| `mmov.m.x md, xs1, xtyp`
-| <<ame:doc:inst:mmov_m_x,Typed scalar ingress and broadcast to M>>
+a| `mbcast.m.x md, xs1, xtyp`
+| <<ame:doc:inst:mbcast_m_x,Typed scalar ingress and broadcast to M>>
 a| `mconv.ew md, ms1`
 | <<ame:doc:inst:mconv_ew,Convert element data between supported datatypes, including packed and non-packed representations>>
+a| `mmove8.m.x md, xs2, xs1`
+| <<ame:doc:inst:mmove8_m_x,Move one 8-bit scalar into an M register position (debug)>>
+a| `mmove16.m.x md, xs2, xs1`
+| <<ame:doc:inst:mmove16_m_x,Move one 16-bit scalar into an M register position (debug)>>
+a| `mmove32.m.x md, xs2, xs1`
+| <<ame:doc:inst:mmove32_m_x,Move one 32-bit scalar into an M register position (debug)>>
+a| `mmove64.m.x md, xs2, xs1`
+| <<ame:doc:inst:mmove64_m_x,Move one 64-bit scalar into an M register position (debug)>>
+a| `mmove8.x.m xd, ms2, xs1`
+| <<ame:doc:inst:mmove8_x_m,Move one 8-bit element from an M register position to an X register (debug)>>
+a| `mmove16.x.m xd, ms2, xs1`
+| <<ame:doc:inst:mmove16_x_m,Move one 16-bit element from an M register position to an X register (debug)>>
+a| `mmove32.x.m xd, ms2, xs1`
+| <<ame:doc:inst:mmove32_x_m,Move one 32-bit element from an M register position to an X register (debug)>>
+a| `mmove64.x.m xd, ms2, xs1`
+| <<ame:doc:inst:mmove64_x_m,Move one 64-bit element from an M register position to an X register (debug)>>
 a| `mpack.ew.x md, ms1, xs1`
 | <<ame:doc:inst:mpack_ew_x,Pack one square into a slot of a packed M register>>
 a| `munpack.ew.x md, ms1, xs1`
@@ -307,12 +327,16 @@ State Management::
 !===
 | Mnemonic | Name
 
+a| `mcolid.ew md`
+| <<ame:doc:inst:mcolid_ew,Write zero-based column index to every element>>
 a| `mmov.a.m md, acc`
 | <<ame:doc:inst:mmov_a_m,Elementwise unconditional move from accumulator to M register>>
 a| `mmov.m.a acc, ms`
 | <<ame:doc:inst:mmov_m_a,Elementwise unconditional move from M register to accumulator>>
 a| `mmov.m.m md, ms`
 | <<ame:doc:inst:mmov_m_m,Elementwise unconditional move between M registers>>
+a| `mrowid.ew md`
+| <<ame:doc:inst:mrowid_ew,Write zero-based row index to every element>>
 a| `mzero.2d.acc acc`
 | <<ame:doc:inst:mzero_2d_acc,Clear accumulator tile>>
 a| `mzero.2d.m md`
@@ -2081,6 +2105,112 @@ if pass:[(]!<<ame:doc:func:ame_scalar_op_supported,ame_scalar_op_supported>>pass
 
 <<<
 
+[#ame:doc:inst:mcolbcast_ew_x]
+=== `mcolbcast.ew.x`
+
+Synopsis::
+Broadcast one column to all columns
+
+Mnemonic::
+`mcolbcast.ew.x md, ms1, xs1`
+
+Encoding::
++
+[IMPORTANT]
+This encoding is provisional and is not a final RISC-V allocation.
++
+[wavedrom, ,svg,subs='attributes',width="100%"]
+....
+{"reg":[{"bits":7,"name": 0x2b,"type":2},{"bits":5,"name": "md","type":4},{"bits":3,"name": {ame-enc-funct3},"type":2},{"bits":5,"name": "ms1","type":4},{"bits":5,"name": "xs1","type":4},{"bits":7,"name": 0x32,"type":2}]}
+....
+
+Description::
+Broadcasts column `c` (from integer register `xs1`) of `ms1` to every column of `md`.
++
+For each row `i` and column `j`:
++
+  `md[i,j] = ms1[i, c]`
++
+If `c` is outside `[0, sqrt(AME_NELEM))`, an `Illegal Instruction` exception is raised.
++
+The `xs1` operand is a control scalar: it is interpreted as an unsigned integer
+column index.  It does not read `CSR[ame_scalar_dtype]` and does not undergo
+AME datatype conversion.
+
+
+NumPy Equivalent::
+[source,python]
+----
+md[:,:] = ms1[:,c][:,np.newaxis]
+----
+
+Decode Variables::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<5> md = $encoding[11:7];
+Bits<5> ms1 = $encoding[19:15];
+Bits<5> xs1 = $encoding[24:20];
+----
+
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<32> dest_dtype = Md[md];
+Bits<32> src1_dtype = Md[ms1];
+if pass:[(]!<<ame:doc:func:ame_op_supported,ame_op_supported>>pass:[(]AmeOperation::COLBCAST1D, dest_dtype, src1_dtype, src1_dtype)) {
+  CSR[<<ame:doc:csr:amestatus,amestatus>>].<<ame:doc:csr_field:amestatus:UN,UN>> = 1;
+} else {
+  U32 src1_element_size = <<ame:doc:func:ame_dtype_val_to_size,ame_dtype_val_to_size>>pass:[(]src1_dtype);
+  U32 src1_nregs = src1_element_size / AME_UNIT_DATATYPE_SIZE;
+  if pass:[(]src1_nregs == 0) {
+    src1_nregs = 1;
+  }
+  U32 src1_elements_per_reg = AME_NELEM / src1_nregs;
+  U32 dest_element_size = <<ame:doc:func:ame_dtype_val_to_size,ame_dtype_val_to_size>>pass:[(]dest_dtype);
+  U32 dest_nregs = dest_element_size / AME_UNIT_DATATYPE_SIZE;
+  if pass:[(]dest_nregs == 0) {
+    dest_nregs = 1;
+  }
+  U32 dest_elements_per_reg = AME_NELEM / dest_nregs;
+  if pass:[(]AME_NUM_M_REGS == 16) {
+    if pass:[(]ms1 >= 16 || md >= 16) {
+      <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+    }
+  }
+  if pass:[(](ms1 % src1_nregs) != 0) {
+    <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+  }
+  if pass:[(](md % dest_nregs) != 0) {
+    <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+  }
+  U32 N = <<ame:doc:func:sqrt,sqrt>>pass:[(]AME_NELEM);
+  Bits<32> c = X[xs1][31:0];
+  if pass:[(]c >= N) {
+    <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+  }
+  for pass:[(]U32 dst_regno = 0; dst_regno < dest_nregs; dst_regno++) {
+    Bits<AME_MAX_SQUARE_SIZE> result = 0;
+    for pass:[(]U32 local_e = 0; local_e < dest_elements_per_reg; local_e++) {
+      U32 e_out = dst_regno * dest_elements_per_reg pass:[+] local_e;
+      U32 i = e_out / N;
+      U32 dst_lo = local_e * dest_element_size;
+      U32 dst_hi = dst_lo pass:[+] dest_element_size - 1;
+      U32 e_src = i * N pass:[+] c;
+      U32 src_regno = e_src / src1_elements_per_reg;
+      U32 src_lo = e_src * src1_element_size - (src_regno * AME_MATRIX_REGISTER_SIZE);
+      U32 src_hi = src_lo pass:[+] src1_element_size - 1;
+      Bits<AME_MAX_DTYPE_SIZE> src_value = <<ame:doc:func:ame_xform_impl_to_rm,ame_xform_impl_to_rm>>pass:[(]M[ms1 pass:[+] src_regno], src1_dtype)[src_hi:src_lo];
+      result[dst_hi:dst_lo] = src_value;
+    }
+    M[md pass:[+] dst_regno] = <<ame:doc:func:ame_xform_rm_to_impl,ame_xform_rm_to_impl>>pass:[(]result, dest_dtype);
+  }
+}
+----
+
+
+<<<
+
 [#ame:doc:inst:mcolgather_ew]
 === `mcolgather.ew`
 
@@ -2192,6 +2322,89 @@ if pass:[(]!<<ame:doc:func:ame_op_supported,ame_op_supported>>pass:[(]AmeOperati
       result[dst_hi:dst_lo] = <<ame:doc:func:ame_op,ame_op>>pass:[(]AmeOperation::GATHER1D, src1_dtype, src_value, src1_dtype, src_value, dest_dtype);
     }
     M[md pass:[+] dst_regno] = <<ame:doc:func:ame_xform_rm_to_impl,ame_xform_rm_to_impl>>pass:[(]result, dest_dtype);
+  }
+}
+----
+
+
+<<<
+
+[#ame:doc:inst:mcolid_ew]
+=== `mcolid.ew`
+
+Synopsis::
+Write zero-based column index to every element
+
+Mnemonic::
+`mcolid.ew md`
+
+Encoding::
++
+[IMPORTANT]
+This encoding is provisional and is not a final RISC-V allocation.
++
+[wavedrom, ,svg,subs='attributes',width="100%"]
+....
+{"reg":[{"bits":7,"name": 0x2b,"type":2},{"bits":5,"name": "md","type":4},{"bits":3,"name": {ame-enc-funct3},"type":2},{"bits":5,"name": 0x2,"type":2},{"bits":5,"name": 0x0,"type":2},{"bits":7,"name": {ame-enc-r1-bank-funct7},"type":2}]}
+....
+
+Description::
+Writes to each element of the M register group `md` the zero-based index of
+the column containing that element.  With `N = sqrt(AME_NELEM)`, every
+element of column `j` receives the value `j`, for `0 <= j < N`.
++
+For each row `i` and column `j`:
++
+  `md[i,j] = j`
++
+The index value is represented in the destination datatype `Md[md]`.  The
+destination datatype must be a supported *integer* datatype in which the
+largest index `N-1` is exactly representable; otherwise `amestatus.UN` is
+set and no register is written.
++
+Together with `<<ame:doc:inst:mrowid_ew,mrowid.ew>>`, this instruction forms
+the index group of the 1-dimensional elementwise instructions, typically
+used to materialize coordinate operands for gather, scatter, and predication
+sequences.
+
+NumPy Equivalent::
+[source,python]
+----
+md[:,:] = np.arange(N)[np.newaxis,:]
+----
+
+Decode Variables::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<5> md = $encoding[11:7];
+----
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<32> dest_dtype = Md[md];
+if pass:[(]!<<ame:doc:func:ame_op_supported,ame_op_supported>>pass:[(]AmeOperation::COLID1D, dest_dtype, dest_dtype, dest_dtype)) {
+  CSR[<<ame:doc:csr:amestatus,amestatus>>].<<ame:doc:csr_field:amestatus:UN,UN>> = 1;
+} else {
+  U32 dest_element_size = <<ame:doc:func:ame_dtype_val_to_size,ame_dtype_val_to_size>>pass:[(]dest_dtype);
+  U32 dest_nregs = dest_element_size / AME_UNIT_DATATYPE_SIZE;
+  if pass:[(]dest_nregs == 0) {
+    dest_nregs = 1;
+  }
+  if pass:[(]AME_NUM_M_REGS == 16) {
+    if pass:[(]md >= 16) {
+      <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+    }
+  }
+  if pass:[(](md % dest_nregs) != 0) {
+    <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+  }
+  U32 N = <<ame:doc:func:sqrt,sqrt>>pass:[(]AME_NELEM);
+  U32 dest_nelements = (dest_nregs * AME_MATRIX_REGISTER_SIZE) / dest_element_size;
+  for pass:[(]U32 e = 0; e < dest_nelements; e++) {
+    U32 j = e % N;
+    Bits<AME_MAX_DTYPE_SIZE> id_value = <<ame:doc:func:ame_op,ame_op>>pass:[(]AmeOperation::COLID1D, dest_dtype, j, dest_dtype, 0, dest_dtype);
+    <<ame:doc:func:ame_stage_m_element_write,ame_stage_m_element_write>>pass:[(]md, dest_dtype, e, id_value);
   }
 }
 ----
@@ -2631,14 +2844,14 @@ if pass:[(]!<<ame:doc:func:ame_op_supported,ame_op_supported>>pass:[(]AmeOperati
 
 <<<
 
-[#ame:doc:inst:mmov_m_x]
-=== `mmov.m.x`
+[#ame:doc:inst:mbcast_m_x]
+=== `mbcast.m.x`
 
 Synopsis::
 Convert an X-register scalar and broadcast it to an M operand
 
 Mnemonic::
-`mmov.m.x md, xs1, xtyp`
+`mbcast.m.x md, xs1, xtyp`
 
 Encoding::
 +
@@ -2647,7 +2860,7 @@ This encoding is provisional and is not a final RISC-V allocation.
 +
 [wavedrom, ,svg,subs='attributes',width="100%"]
 ....
-{"reg":[{"bits":7,"name":0x2b,"type":2},{"bits":5,"name":"md","type":4},{"bits":3,"name":{ame-enc-funct3},"type":2},{"bits":5,"name":"xs1","type":4},{"bits":5,"name":"xtyp","type":4},{"bits":7,"name":0x32,"type":2}]}
+{"reg":[{"bits":7,"name":0x2b,"type":2},{"bits":5,"name":"md","type":4},{"bits":3,"name":{ame-enc-funct3},"type":2},{"bits":5,"name":"xs1","type":4},{"bits":5,"name":"xtyp","type":4},{"bits":7,"name":0x58,"type":2}]}
 ....
 
 Description::
@@ -4420,7 +4633,7 @@ This encoding is provisional and is not a final RISC-V allocation.
 +
 [wavedrom, ,svg,subs='attributes',width="100%"]
 ....
-{"reg":[{"bits":7,"name": 0x2b,"type":2},{"bits":5,"name": "md","type":4},{"bits":3,"name": {ame-enc-funct3},"type":2},{"bits":5,"name": "xs1","type":4},{"bits":5,"name": "xs2","type":4},{"bits":7,"name": 0x51,"type":2}]}
+{"reg":[{"bits":7,"name": 0x2b,"type":2},{"bits":5,"name": "md","type":4},{"bits":3,"name": {ame-enc-funct3},"type":2},{"bits":5,"name": "xs1","type":4},{"bits":5,"name": "xs2","type":4},{"bits":7,"name": 0x54,"type":2}]}
 ....
 
 Description::
@@ -4514,7 +4727,7 @@ This encoding is provisional and is not a final RISC-V allocation.
 +
 [wavedrom, ,svg,subs='attributes',width="100%"]
 ....
-{"reg":[{"bits":7,"name": 0x2b,"type":2},{"bits":5,"name": "md","type":4},{"bits":3,"name": {ame-enc-funct3},"type":2},{"bits":5,"name": "xs1","type":4},{"bits":5,"name": "xs2","type":4},{"bits":7,"name": 0x52,"type":2}]}
+{"reg":[{"bits":7,"name": 0x2b,"type":2},{"bits":5,"name": "md","type":4},{"bits":3,"name": {ame-enc-funct3},"type":2},{"bits":5,"name": "xs1","type":4},{"bits":5,"name": "xs2","type":4},{"bits":7,"name": 0x55,"type":2}]}
 ....
 
 Description::
@@ -5414,6 +5627,682 @@ if pass:[(]dest_dtype != src_dtype) {
     }
   }
 }
+----
+
+
+<<<
+
+[#ame:doc:inst:mmove8_m_x]
+=== `mmove8.m.x`
+
+Synopsis::
+Move one 8-bit scalar into an M register position (debug)
+
+Mnemonic::
+`mmove8.m.x md, xs2, xs1`
+
+Encoding::
++
+[IMPORTANT]
+This encoding is provisional and is not a final RISC-V allocation.
++
+[wavedrom, ,svg,subs='attributes',width="100%"]
+....
+{"reg":[{"bits":7,"name":0x2b,"type":2},{"bits":5,"name":"md","type":4},{"bits":3,"name":{ame-enc-funct3},"type":2},{"bits":5,"name":"xs2","type":4},{"bits":5,"name":"xs1","type":4},{"bits":7,"name":0x59,"type":2}]}
+....
+
+Description::
+Writes the low 8 bits of `X[xs2]` into one 8-bit element position of the
+single M register `md`.  The contents of `md` are viewed, in row-major order, as
+`N = sqrt(AME_NELEM)` rows of `row_elements = (N * AME_UNIT_DATATYPE_SIZE) / 8`
+8-bit elements each, independent of the configured datatype `Md[md]`.
++
+The element position `pos` is selected by the low `log2(N * row_elements)`
+bits of `X[xs1]`; higher bits are ignored.  The selected column is
+`pos % row_elements` and the selected row is `pos / row_elements`.
++
+This instruction is intended for debugging.  The element size is defined by
+the instruction itself: it does not read `CSR[ame_scalar_dtype]`, does not
+read or convert using `Md[md]`, does not form a register group, and never
+sets `amestatus.UN`.  The register contents are first normalized with the
+row-major layout transformation, using the unsigned integer datatype of
+size `AME_UNIT_DATATYPE_SIZE`, for which exactly one square occupies one M
+register; the normalized image is then reinterpreted, by bit slicing, as
+`N` rows of `row_elements` elements of the instruction's element size.
+Both steps are defined independently of the implementation register
+layout, so the position-to-element mapping is identical on every
+implementation.  If one row of the row-major
+view is narrower than the element size, an `Illegal Instruction` exception
+is raised.
+
+NumPy Equivalent::
+[source,python]
+----
+rm = md.view(np.uint8).reshape(N, row_elements)  # row-major view of the register
+rm[pos // row_elements, pos % row_elements] = np.uint8(X[xs2])
+----
+
+Decode Variables::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<5> md = $encoding[11:7];
+Bits<5> xs2 = $encoding[19:15];
+Bits<5> xs1 = $encoding[24:20];
+----
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+if pass:[(]AME_NUM_M_REGS == 16 && (md >= 16)) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 element_size = 8;
+U32 N = <<ame:doc:func:sqrt,sqrt>>pass:[(]AME_NELEM);
+U32 row_elements = (N * AME_UNIT_DATATYPE_SIZE) / element_size;
+if pass:[(]row_elements == 0) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 total_elements = N * row_elements;
+U32 pos = X[xs1][31:0] % total_elements;
+U32 bit_lo = pos * element_size;
+U32 bit_hi = bit_lo pass:[+] element_size - 1;
+Bits<32> view_dtype = AME_UNIT_DATATYPE_SIZE;
+Bits<AME_MAX_SQUARE_SIZE> rm_image = <<ame:doc:func:ame_xform_impl_to_rm,ame_xform_impl_to_rm>>pass:[(]M[md], view_dtype);
+rm_image[bit_hi:bit_lo] = X[xs2][element_size - 1:0];
+M[md] = <<ame:doc:func:ame_xform_rm_to_impl,ame_xform_rm_to_impl>>pass:[(]rm_image, view_dtype);
+----
+
+
+<<<
+
+[#ame:doc:inst:mmove16_m_x]
+=== `mmove16.m.x`
+
+Synopsis::
+Move one 16-bit scalar into an M register position (debug)
+
+Mnemonic::
+`mmove16.m.x md, xs2, xs1`
+
+Encoding::
++
+[IMPORTANT]
+This encoding is provisional and is not a final RISC-V allocation.
++
+[wavedrom, ,svg,subs='attributes',width="100%"]
+....
+{"reg":[{"bits":7,"name":0x2b,"type":2},{"bits":5,"name":"md","type":4},{"bits":3,"name":{ame-enc-funct3},"type":2},{"bits":5,"name":"xs2","type":4},{"bits":5,"name":"xs1","type":4},{"bits":7,"name":0x5a,"type":2}]}
+....
+
+Description::
+Writes the low 16 bits of `X[xs2]` into one 16-bit element position of the
+single M register `md`.  The contents of `md` are viewed, in row-major order, as
+`N = sqrt(AME_NELEM)` rows of `row_elements = (N * AME_UNIT_DATATYPE_SIZE) / 16`
+16-bit elements each, independent of the configured datatype `Md[md]`.
++
+The element position `pos` is selected by the low `log2(N * row_elements)`
+bits of `X[xs1]`; higher bits are ignored.  The selected column is
+`pos % row_elements` and the selected row is `pos / row_elements`.
++
+This instruction is intended for debugging.  The element size is defined by
+the instruction itself: it does not read `CSR[ame_scalar_dtype]`, does not
+read or convert using `Md[md]`, does not form a register group, and never
+sets `amestatus.UN`.  The register contents are first normalized with the
+row-major layout transformation, using the unsigned integer datatype of
+size `AME_UNIT_DATATYPE_SIZE`, for which exactly one square occupies one M
+register; the normalized image is then reinterpreted, by bit slicing, as
+`N` rows of `row_elements` elements of the instruction's element size.
+Both steps are defined independently of the implementation register
+layout, so the position-to-element mapping is identical on every
+implementation.  If one row of the row-major
+view is narrower than the element size, an `Illegal Instruction` exception
+is raised.
+
+NumPy Equivalent::
+[source,python]
+----
+rm = md.view(np.uint16).reshape(N, row_elements)  # row-major view of the register
+rm[pos // row_elements, pos % row_elements] = np.uint16(X[xs2])
+----
+
+Decode Variables::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<5> md = $encoding[11:7];
+Bits<5> xs2 = $encoding[19:15];
+Bits<5> xs1 = $encoding[24:20];
+----
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+if pass:[(]AME_NUM_M_REGS == 16 && (md >= 16)) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 element_size = 16;
+U32 N = <<ame:doc:func:sqrt,sqrt>>pass:[(]AME_NELEM);
+U32 row_elements = (N * AME_UNIT_DATATYPE_SIZE) / element_size;
+if pass:[(]row_elements == 0) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 total_elements = N * row_elements;
+U32 pos = X[xs1][31:0] % total_elements;
+U32 bit_lo = pos * element_size;
+U32 bit_hi = bit_lo pass:[+] element_size - 1;
+Bits<32> view_dtype = AME_UNIT_DATATYPE_SIZE;
+Bits<AME_MAX_SQUARE_SIZE> rm_image = <<ame:doc:func:ame_xform_impl_to_rm,ame_xform_impl_to_rm>>pass:[(]M[md], view_dtype);
+rm_image[bit_hi:bit_lo] = X[xs2][element_size - 1:0];
+M[md] = <<ame:doc:func:ame_xform_rm_to_impl,ame_xform_rm_to_impl>>pass:[(]rm_image, view_dtype);
+----
+
+
+<<<
+
+[#ame:doc:inst:mmove32_m_x]
+=== `mmove32.m.x`
+
+Synopsis::
+Move one 32-bit scalar into an M register position (debug)
+
+Mnemonic::
+`mmove32.m.x md, xs2, xs1`
+
+Encoding::
++
+[IMPORTANT]
+This encoding is provisional and is not a final RISC-V allocation.
++
+[wavedrom, ,svg,subs='attributes',width="100%"]
+....
+{"reg":[{"bits":7,"name":0x2b,"type":2},{"bits":5,"name":"md","type":4},{"bits":3,"name":{ame-enc-funct3},"type":2},{"bits":5,"name":"xs2","type":4},{"bits":5,"name":"xs1","type":4},{"bits":7,"name":0x5b,"type":2}]}
+....
+
+Description::
+Writes the low 32 bits of `X[xs2]` into one 32-bit element position of the
+single M register `md`.  The contents of `md` are viewed, in row-major order, as
+`N = sqrt(AME_NELEM)` rows of `row_elements = (N * AME_UNIT_DATATYPE_SIZE) / 32`
+32-bit elements each, independent of the configured datatype `Md[md]`.
++
+The element position `pos` is selected by the low `log2(N * row_elements)`
+bits of `X[xs1]`; higher bits are ignored.  The selected column is
+`pos % row_elements` and the selected row is `pos / row_elements`.
++
+This instruction is intended for debugging.  The element size is defined by
+the instruction itself: it does not read `CSR[ame_scalar_dtype]`, does not
+read or convert using `Md[md]`, does not form a register group, and never
+sets `amestatus.UN`.  The register contents are first normalized with the
+row-major layout transformation, using the unsigned integer datatype of
+size `AME_UNIT_DATATYPE_SIZE`, for which exactly one square occupies one M
+register; the normalized image is then reinterpreted, by bit slicing, as
+`N` rows of `row_elements` elements of the instruction's element size.
+Both steps are defined independently of the implementation register
+layout, so the position-to-element mapping is identical on every
+implementation.  If one row of the row-major
+view is narrower than the element size, an `Illegal Instruction` exception
+is raised.
+
+NumPy Equivalent::
+[source,python]
+----
+rm = md.view(np.uint32).reshape(N, row_elements)  # row-major view of the register
+rm[pos // row_elements, pos % row_elements] = np.uint32(X[xs2])
+----
+
+Decode Variables::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<5> md = $encoding[11:7];
+Bits<5> xs2 = $encoding[19:15];
+Bits<5> xs1 = $encoding[24:20];
+----
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+if pass:[(]AME_NUM_M_REGS == 16 && (md >= 16)) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 element_size = 32;
+U32 N = <<ame:doc:func:sqrt,sqrt>>pass:[(]AME_NELEM);
+U32 row_elements = (N * AME_UNIT_DATATYPE_SIZE) / element_size;
+if pass:[(]row_elements == 0) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 total_elements = N * row_elements;
+U32 pos = X[xs1][31:0] % total_elements;
+U32 bit_lo = pos * element_size;
+U32 bit_hi = bit_lo pass:[+] element_size - 1;
+Bits<32> view_dtype = AME_UNIT_DATATYPE_SIZE;
+Bits<AME_MAX_SQUARE_SIZE> rm_image = <<ame:doc:func:ame_xform_impl_to_rm,ame_xform_impl_to_rm>>pass:[(]M[md], view_dtype);
+rm_image[bit_hi:bit_lo] = X[xs2][element_size - 1:0];
+M[md] = <<ame:doc:func:ame_xform_rm_to_impl,ame_xform_rm_to_impl>>pass:[(]rm_image, view_dtype);
+----
+
+
+<<<
+
+[#ame:doc:inst:mmove64_m_x]
+=== `mmove64.m.x`
+
+Synopsis::
+Move one 64-bit scalar into an M register position (debug)
+
+Mnemonic::
+`mmove64.m.x md, xs2, xs1`
+
+Encoding::
++
+[IMPORTANT]
+This encoding is provisional and is not a final RISC-V allocation.
++
+[wavedrom, ,svg,subs='attributes',width="100%"]
+....
+{"reg":[{"bits":7,"name":0x2b,"type":2},{"bits":5,"name":"md","type":4},{"bits":3,"name":{ame-enc-funct3},"type":2},{"bits":5,"name":"xs2","type":4},{"bits":5,"name":"xs1","type":4},{"bits":7,"name":0x5c,"type":2}]}
+....
+
+Description::
+Writes the low 64 bits of `X[xs2]` into one 64-bit element position of the
+single M register `md`.  The contents of `md` are viewed, in row-major order, as
+`N = sqrt(AME_NELEM)` rows of `row_elements = (N * AME_UNIT_DATATYPE_SIZE) / 64`
+64-bit elements each, independent of the configured datatype `Md[md]`.
++
+This 64-bit form requires `XLEN >= 64`; when `XLEN < 64`, the instruction
+raises an `Illegal Instruction` exception.
++
+The element position `pos` is selected by the low `log2(N * row_elements)`
+bits of `X[xs1]`; higher bits are ignored.  The selected column is
+`pos % row_elements` and the selected row is `pos / row_elements`.
++
+This instruction is intended for debugging.  The element size is defined by
+the instruction itself: it does not read `CSR[ame_scalar_dtype]`, does not
+read or convert using `Md[md]`, does not form a register group, and never
+sets `amestatus.UN`.  The register contents are first normalized with the
+row-major layout transformation, using the unsigned integer datatype of
+size `AME_UNIT_DATATYPE_SIZE`, for which exactly one square occupies one M
+register; the normalized image is then reinterpreted, by bit slicing, as
+`N` rows of `row_elements` elements of the instruction's element size.
+Both steps are defined independently of the implementation register
+layout, so the position-to-element mapping is identical on every
+implementation.  If one row of the row-major
+view is narrower than the element size, an `Illegal Instruction` exception
+is raised.
+
+NumPy Equivalent::
+[source,python]
+----
+rm = md.view(np.uint64).reshape(N, row_elements)  # row-major view of the register
+rm[pos // row_elements, pos % row_elements] = np.uint64(X[xs2])
+----
+
+Decode Variables::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<5> md = $encoding[11:7];
+Bits<5> xs2 = $encoding[19:15];
+Bits<5> xs1 = $encoding[24:20];
+----
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+if pass:[(]AME_NUM_M_REGS == 16 && (md >= 16)) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 element_size = 64;
+if pass:[(]XLEN < 64) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 N = <<ame:doc:func:sqrt,sqrt>>pass:[(]AME_NELEM);
+U32 row_elements = (N * AME_UNIT_DATATYPE_SIZE) / element_size;
+if pass:[(]row_elements == 0) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 total_elements = N * row_elements;
+U32 pos = X[xs1][31:0] % total_elements;
+U32 bit_lo = pos * element_size;
+U32 bit_hi = bit_lo pass:[+] element_size - 1;
+Bits<32> view_dtype = AME_UNIT_DATATYPE_SIZE;
+Bits<AME_MAX_SQUARE_SIZE> rm_image = <<ame:doc:func:ame_xform_impl_to_rm,ame_xform_impl_to_rm>>pass:[(]M[md], view_dtype);
+rm_image[bit_hi:bit_lo] = X[xs2][element_size - 1:0];
+M[md] = <<ame:doc:func:ame_xform_rm_to_impl,ame_xform_rm_to_impl>>pass:[(]rm_image, view_dtype);
+----
+
+
+<<<
+
+[#ame:doc:inst:mmove8_x_m]
+=== `mmove8.x.m`
+
+Synopsis::
+Move one 8-bit element from an M register position to an X register (debug)
+
+Mnemonic::
+`mmove8.x.m xd, ms2, xs1`
+
+Encoding::
++
+[IMPORTANT]
+This encoding is provisional and is not a final RISC-V allocation.
++
+[wavedrom, ,svg,subs='attributes',width="100%"]
+....
+{"reg":[{"bits":7,"name":0x2b,"type":2},{"bits":5,"name":"xd","type":4},{"bits":3,"name":{ame-enc-funct3},"type":2},{"bits":5,"name":"ms2","type":4},{"bits":5,"name":"xs1","type":4},{"bits":7,"name":0x5d,"type":2}]}
+....
+
+Description::
+Reads one 8-bit element from the single M register `ms2` and writes it,
+zero-extended, to `X[xd]`.  The contents of `ms2` are viewed, in row-major order, as
+`N = sqrt(AME_NELEM)` rows of `row_elements = (N * AME_UNIT_DATATYPE_SIZE) / 8`
+8-bit elements each, independent of the configured datatype `Md[ms2]`.
++
+The element position `pos` is selected by the low `log2(N * row_elements)`
+bits of `X[xs1]`, exactly as in `<<ame:doc:inst:mmove8_m_x,mmove8.m.x>>`;
+higher bits are ignored.  The selected column is `pos % row_elements` and
+the selected row is `pos / row_elements`.
++
+This instruction is intended for debugging.  The element size is defined by
+the instruction itself: it does not read `CSR[ame_scalar_dtype]`, does not
+read or convert using `Md[ms2]`, does not form a register group, and never
+sets `amestatus.UN`.  The register contents are first normalized with the
+row-major layout transformation, using the unsigned integer datatype of
+size `AME_UNIT_DATATYPE_SIZE`, for which exactly one square occupies one M
+register; the normalized image is then reinterpreted, by bit slicing, as
+`N` rows of `row_elements` elements of the instruction's element size.
+Both steps are defined independently of the implementation register
+layout, so the position-to-element mapping is identical on every
+implementation.  If one row of the row-major
+view is narrower than the element size, an `Illegal Instruction` exception
+is raised.
+
+NumPy Equivalent::
+[source,python]
+----
+rm = ms2.view(np.uint8).reshape(N, row_elements)  # row-major view of the register
+X[xd] = np.uint64(rm[pos // row_elements, pos % row_elements])
+----
+
+Decode Variables::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<5> xd = $encoding[11:7];
+Bits<5> ms2 = $encoding[19:15];
+Bits<5> xs1 = $encoding[24:20];
+----
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+if pass:[(]AME_NUM_M_REGS == 16 && (ms2 >= 16)) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 element_size = 8;
+U32 N = <<ame:doc:func:sqrt,sqrt>>pass:[(]AME_NELEM);
+U32 row_elements = (N * AME_UNIT_DATATYPE_SIZE) / element_size;
+if pass:[(]row_elements == 0) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 total_elements = N * row_elements;
+U32 pos = X[xs1][31:0] % total_elements;
+U32 bit_lo = pos * element_size;
+U32 bit_hi = bit_lo pass:[+] element_size - 1;
+Bits<32> view_dtype = AME_UNIT_DATATYPE_SIZE;
+Bits<AME_MAX_SQUARE_SIZE> rm_image = <<ame:doc:func:ame_xform_impl_to_rm,ame_xform_impl_to_rm>>pass:[(]M[ms2], view_dtype);
+X[xd] = rm_image[bit_hi:bit_lo];
+----
+
+
+<<<
+
+[#ame:doc:inst:mmove16_x_m]
+=== `mmove16.x.m`
+
+Synopsis::
+Move one 16-bit element from an M register position to an X register (debug)
+
+Mnemonic::
+`mmove16.x.m xd, ms2, xs1`
+
+Encoding::
++
+[IMPORTANT]
+This encoding is provisional and is not a final RISC-V allocation.
++
+[wavedrom, ,svg,subs='attributes',width="100%"]
+....
+{"reg":[{"bits":7,"name":0x2b,"type":2},{"bits":5,"name":"xd","type":4},{"bits":3,"name":{ame-enc-funct3},"type":2},{"bits":5,"name":"ms2","type":4},{"bits":5,"name":"xs1","type":4},{"bits":7,"name":0x5e,"type":2}]}
+....
+
+Description::
+Reads one 16-bit element from the single M register `ms2` and writes it,
+zero-extended, to `X[xd]`.  The contents of `ms2` are viewed, in row-major order, as
+`N = sqrt(AME_NELEM)` rows of `row_elements = (N * AME_UNIT_DATATYPE_SIZE) / 16`
+16-bit elements each, independent of the configured datatype `Md[ms2]`.
++
+The element position `pos` is selected by the low `log2(N * row_elements)`
+bits of `X[xs1]`, exactly as in `<<ame:doc:inst:mmove16_m_x,mmove16.m.x>>`;
+higher bits are ignored.  The selected column is `pos % row_elements` and
+the selected row is `pos / row_elements`.
++
+This instruction is intended for debugging.  The element size is defined by
+the instruction itself: it does not read `CSR[ame_scalar_dtype]`, does not
+read or convert using `Md[ms2]`, does not form a register group, and never
+sets `amestatus.UN`.  The register contents are first normalized with the
+row-major layout transformation, using the unsigned integer datatype of
+size `AME_UNIT_DATATYPE_SIZE`, for which exactly one square occupies one M
+register; the normalized image is then reinterpreted, by bit slicing, as
+`N` rows of `row_elements` elements of the instruction's element size.
+Both steps are defined independently of the implementation register
+layout, so the position-to-element mapping is identical on every
+implementation.  If one row of the row-major
+view is narrower than the element size, an `Illegal Instruction` exception
+is raised.
+
+NumPy Equivalent::
+[source,python]
+----
+rm = ms2.view(np.uint16).reshape(N, row_elements)  # row-major view of the register
+X[xd] = np.uint64(rm[pos // row_elements, pos % row_elements])
+----
+
+Decode Variables::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<5> xd = $encoding[11:7];
+Bits<5> ms2 = $encoding[19:15];
+Bits<5> xs1 = $encoding[24:20];
+----
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+if pass:[(]AME_NUM_M_REGS == 16 && (ms2 >= 16)) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 element_size = 16;
+U32 N = <<ame:doc:func:sqrt,sqrt>>pass:[(]AME_NELEM);
+U32 row_elements = (N * AME_UNIT_DATATYPE_SIZE) / element_size;
+if pass:[(]row_elements == 0) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 total_elements = N * row_elements;
+U32 pos = X[xs1][31:0] % total_elements;
+U32 bit_lo = pos * element_size;
+U32 bit_hi = bit_lo pass:[+] element_size - 1;
+Bits<32> view_dtype = AME_UNIT_DATATYPE_SIZE;
+Bits<AME_MAX_SQUARE_SIZE> rm_image = <<ame:doc:func:ame_xform_impl_to_rm,ame_xform_impl_to_rm>>pass:[(]M[ms2], view_dtype);
+X[xd] = rm_image[bit_hi:bit_lo];
+----
+
+
+<<<
+
+[#ame:doc:inst:mmove32_x_m]
+=== `mmove32.x.m`
+
+Synopsis::
+Move one 32-bit element from an M register position to an X register (debug)
+
+Mnemonic::
+`mmove32.x.m xd, ms2, xs1`
+
+Encoding::
++
+[IMPORTANT]
+This encoding is provisional and is not a final RISC-V allocation.
++
+[wavedrom, ,svg,subs='attributes',width="100%"]
+....
+{"reg":[{"bits":7,"name":0x2b,"type":2},{"bits":5,"name":"xd","type":4},{"bits":3,"name":{ame-enc-funct3},"type":2},{"bits":5,"name":"ms2","type":4},{"bits":5,"name":"xs1","type":4},{"bits":7,"name":0x5f,"type":2}]}
+....
+
+Description::
+Reads one 32-bit element from the single M register `ms2` and writes it,
+zero-extended, to `X[xd]`.  The contents of `ms2` are viewed, in row-major order, as
+`N = sqrt(AME_NELEM)` rows of `row_elements = (N * AME_UNIT_DATATYPE_SIZE) / 32`
+32-bit elements each, independent of the configured datatype `Md[ms2]`.
++
+The element position `pos` is selected by the low `log2(N * row_elements)`
+bits of `X[xs1]`, exactly as in `<<ame:doc:inst:mmove32_m_x,mmove32.m.x>>`;
+higher bits are ignored.  The selected column is `pos % row_elements` and
+the selected row is `pos / row_elements`.
++
+This instruction is intended for debugging.  The element size is defined by
+the instruction itself: it does not read `CSR[ame_scalar_dtype]`, does not
+read or convert using `Md[ms2]`, does not form a register group, and never
+sets `amestatus.UN`.  The register contents are first normalized with the
+row-major layout transformation, using the unsigned integer datatype of
+size `AME_UNIT_DATATYPE_SIZE`, for which exactly one square occupies one M
+register; the normalized image is then reinterpreted, by bit slicing, as
+`N` rows of `row_elements` elements of the instruction's element size.
+Both steps are defined independently of the implementation register
+layout, so the position-to-element mapping is identical on every
+implementation.  If one row of the row-major
+view is narrower than the element size, an `Illegal Instruction` exception
+is raised.
+
+NumPy Equivalent::
+[source,python]
+----
+rm = ms2.view(np.uint32).reshape(N, row_elements)  # row-major view of the register
+X[xd] = np.uint64(rm[pos // row_elements, pos % row_elements])
+----
+
+Decode Variables::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<5> xd = $encoding[11:7];
+Bits<5> ms2 = $encoding[19:15];
+Bits<5> xs1 = $encoding[24:20];
+----
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+if pass:[(]AME_NUM_M_REGS == 16 && (ms2 >= 16)) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 element_size = 32;
+U32 N = <<ame:doc:func:sqrt,sqrt>>pass:[(]AME_NELEM);
+U32 row_elements = (N * AME_UNIT_DATATYPE_SIZE) / element_size;
+if pass:[(]row_elements == 0) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 total_elements = N * row_elements;
+U32 pos = X[xs1][31:0] % total_elements;
+U32 bit_lo = pos * element_size;
+U32 bit_hi = bit_lo pass:[+] element_size - 1;
+Bits<32> view_dtype = AME_UNIT_DATATYPE_SIZE;
+Bits<AME_MAX_SQUARE_SIZE> rm_image = <<ame:doc:func:ame_xform_impl_to_rm,ame_xform_impl_to_rm>>pass:[(]M[ms2], view_dtype);
+X[xd] = rm_image[bit_hi:bit_lo];
+----
+
+
+<<<
+
+[#ame:doc:inst:mmove64_x_m]
+=== `mmove64.x.m`
+
+Synopsis::
+Move one 64-bit element from an M register position to an X register (debug)
+
+Mnemonic::
+`mmove64.x.m xd, ms2, xs1`
+
+Encoding::
++
+[IMPORTANT]
+This encoding is provisional and is not a final RISC-V allocation.
++
+[wavedrom, ,svg,subs='attributes',width="100%"]
+....
+{"reg":[{"bits":7,"name":0x2b,"type":2},{"bits":5,"name":"xd","type":4},{"bits":3,"name":{ame-enc-funct3},"type":2},{"bits":5,"name":"ms2","type":4},{"bits":5,"name":"xs1","type":4},{"bits":7,"name":0x60,"type":2}]}
+....
+
+Description::
+Reads one 64-bit element from the single M register `ms2` and writes it,
+zero-extended, to `X[xd]`.  The contents of `ms2` are viewed, in row-major order, as
+`N = sqrt(AME_NELEM)` rows of `row_elements = (N * AME_UNIT_DATATYPE_SIZE) / 64`
+64-bit elements each, independent of the configured datatype `Md[ms2]`.
++
+This 64-bit form requires `XLEN >= 64`; when `XLEN < 64`, the instruction
+raises an `Illegal Instruction` exception.
++
+The element position `pos` is selected by the low `log2(N * row_elements)`
+bits of `X[xs1]`, exactly as in `<<ame:doc:inst:mmove64_m_x,mmove64.m.x>>`;
+higher bits are ignored.  The selected column is `pos % row_elements` and
+the selected row is `pos / row_elements`.
++
+This instruction is intended for debugging.  The element size is defined by
+the instruction itself: it does not read `CSR[ame_scalar_dtype]`, does not
+read or convert using `Md[ms2]`, does not form a register group, and never
+sets `amestatus.UN`.  The register contents are first normalized with the
+row-major layout transformation, using the unsigned integer datatype of
+size `AME_UNIT_DATATYPE_SIZE`, for which exactly one square occupies one M
+register; the normalized image is then reinterpreted, by bit slicing, as
+`N` rows of `row_elements` elements of the instruction's element size.
+Both steps are defined independently of the implementation register
+layout, so the position-to-element mapping is identical on every
+implementation.  If one row of the row-major
+view is narrower than the element size, an `Illegal Instruction` exception
+is raised.
+
+NumPy Equivalent::
+[source,python]
+----
+rm = ms2.view(np.uint64).reshape(N, row_elements)  # row-major view of the register
+X[xd] = rm[pos // row_elements, pos % row_elements]
+----
+
+Decode Variables::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<5> xd = $encoding[11:7];
+Bits<5> ms2 = $encoding[19:15];
+Bits<5> xs1 = $encoding[24:20];
+----
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+if pass:[(]AME_NUM_M_REGS == 16 && (ms2 >= 16)) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 element_size = 64;
+if pass:[(]XLEN < 64) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 N = <<ame:doc:func:sqrt,sqrt>>pass:[(]AME_NELEM);
+U32 row_elements = (N * AME_UNIT_DATATYPE_SIZE) / element_size;
+if pass:[(]row_elements == 0) {
+  <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+}
+U32 total_elements = N * row_elements;
+U32 pos = X[xs1][31:0] % total_elements;
+U32 bit_lo = pos * element_size;
+U32 bit_hi = bit_lo pass:[+] element_size - 1;
+Bits<32> view_dtype = AME_UNIT_DATATYPE_SIZE;
+Bits<AME_MAX_SQUARE_SIZE> rm_image = <<ame:doc:func:ame_xform_impl_to_rm,ame_xform_impl_to_rm>>pass:[(]M[ms2], view_dtype);
+X[xd] = rm_image[bit_hi:bit_lo];
 ----
 
 
@@ -9221,6 +10110,112 @@ if pass:[(]!<<ame:doc:func:ame_op_supported,ame_op_supported>>pass:[(]AmeOperati
 
 <<<
 
+[#ame:doc:inst:mrowbcast_ew_x]
+=== `mrowbcast.ew.x`
+
+Synopsis::
+Broadcast one row to all rows
+
+Mnemonic::
+`mrowbcast.ew.x md, ms1, xs1`
+
+Encoding::
++
+[IMPORTANT]
+This encoding is provisional and is not a final RISC-V allocation.
++
+[wavedrom, ,svg,subs='attributes',width="100%"]
+....
+{"reg":[{"bits":7,"name": 0x2b,"type":2},{"bits":5,"name": "md","type":4},{"bits":3,"name": {ame-enc-funct3},"type":2},{"bits":5,"name": "ms1","type":4},{"bits":5,"name": "xs1","type":4},{"bits":7,"name": 0x35,"type":2}]}
+....
+
+Description::
+Broadcasts row `c` (from integer register `xs1`) of `ms1` to every row of `md`.
++
+For each row `i` and column `j`:
++
+  `md[i,j] = ms1[c, j]`
++
+If `c` is outside `[0, sqrt(AME_NELEM))`, an `Illegal Instruction` exception is raised.
++
+The `xs1` operand is a control scalar: it is interpreted as an unsigned integer
+row index.  It does not read `CSR[ame_scalar_dtype]` and does not undergo
+AME datatype conversion.
+
+
+NumPy Equivalent::
+[source,python]
+----
+md[:,:] = ms1[c,:][np.newaxis,:]
+----
+
+Decode Variables::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<5> md = $encoding[11:7];
+Bits<5> ms1 = $encoding[19:15];
+Bits<5> xs1 = $encoding[24:20];
+----
+
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<32> dest_dtype = Md[md];
+Bits<32> src1_dtype = Md[ms1];
+if pass:[(]!<<ame:doc:func:ame_op_supported,ame_op_supported>>pass:[(]AmeOperation::ROWBCAST1D, dest_dtype, src1_dtype, src1_dtype)) {
+  CSR[<<ame:doc:csr:amestatus,amestatus>>].<<ame:doc:csr_field:amestatus:UN,UN>> = 1;
+} else {
+  U32 src1_element_size = <<ame:doc:func:ame_dtype_val_to_size,ame_dtype_val_to_size>>pass:[(]src1_dtype);
+  U32 src1_nregs = src1_element_size / AME_UNIT_DATATYPE_SIZE;
+  if pass:[(]src1_nregs == 0) {
+    src1_nregs = 1;
+  }
+  U32 src1_elements_per_reg = AME_NELEM / src1_nregs;
+  U32 dest_element_size = <<ame:doc:func:ame_dtype_val_to_size,ame_dtype_val_to_size>>pass:[(]dest_dtype);
+  U32 dest_nregs = dest_element_size / AME_UNIT_DATATYPE_SIZE;
+  if pass:[(]dest_nregs == 0) {
+    dest_nregs = 1;
+  }
+  U32 dest_elements_per_reg = AME_NELEM / dest_nregs;
+  if pass:[(]AME_NUM_M_REGS == 16) {
+    if pass:[(]ms1 >= 16 || md >= 16) {
+      <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+    }
+  }
+  if pass:[(](ms1 % src1_nregs) != 0) {
+    <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+  }
+  if pass:[(](md % dest_nregs) != 0) {
+    <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+  }
+  U32 N = <<ame:doc:func:sqrt,sqrt>>pass:[(]AME_NELEM);
+  Bits<32> c = X[xs1][31:0];
+  if pass:[(]c >= N) {
+    <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+  }
+  for pass:[(]U32 dst_regno = 0; dst_regno < dest_nregs; dst_regno++) {
+    Bits<AME_MAX_SQUARE_SIZE> result = 0;
+    for pass:[(]U32 local_e = 0; local_e < dest_elements_per_reg; local_e++) {
+      U32 e_out = dst_regno * dest_elements_per_reg pass:[+] local_e;
+      U32 j = e_out % N;
+      U32 dst_lo = local_e * dest_element_size;
+      U32 dst_hi = dst_lo pass:[+] dest_element_size - 1;
+      U32 e_src = c * N pass:[+] j;
+      U32 src_regno = e_src / src1_elements_per_reg;
+      U32 src_lo = e_src * src1_element_size - (src_regno * AME_MATRIX_REGISTER_SIZE);
+      U32 src_hi = src_lo pass:[+] src1_element_size - 1;
+      Bits<AME_MAX_DTYPE_SIZE> src_value = <<ame:doc:func:ame_xform_impl_to_rm,ame_xform_impl_to_rm>>pass:[(]M[ms1 pass:[+] src_regno], src1_dtype)[src_hi:src_lo];
+      result[dst_hi:dst_lo] = src_value;
+    }
+    M[md pass:[+] dst_regno] = <<ame:doc:func:ame_xform_rm_to_impl,ame_xform_rm_to_impl>>pass:[(]result, dest_dtype);
+  }
+}
+----
+
+
+<<<
+
 [#ame:doc:inst:mrowgather_ew]
 === `mrowgather.ew`
 
@@ -9332,6 +10327,89 @@ if pass:[(]!<<ame:doc:func:ame_op_supported,ame_op_supported>>pass:[(]AmeOperati
       result[dst_hi:dst_lo] = <<ame:doc:func:ame_op,ame_op>>pass:[(]AmeOperation::GATHERROW1D, src1_dtype, src_value, src1_dtype, src_value, dest_dtype);
     }
     M[md pass:[+] dst_regno] = <<ame:doc:func:ame_xform_rm_to_impl,ame_xform_rm_to_impl>>pass:[(]result, dest_dtype);
+  }
+}
+----
+
+
+<<<
+
+[#ame:doc:inst:mrowid_ew]
+=== `mrowid.ew`
+
+Synopsis::
+Write zero-based row index to every element
+
+Mnemonic::
+`mrowid.ew md`
+
+Encoding::
++
+[IMPORTANT]
+This encoding is provisional and is not a final RISC-V allocation.
++
+[wavedrom, ,svg,subs='attributes',width="100%"]
+....
+{"reg":[{"bits":7,"name": 0x2b,"type":2},{"bits":5,"name": "md","type":4},{"bits":3,"name": {ame-enc-funct3},"type":2},{"bits":5,"name": 0x3,"type":2},{"bits":5,"name": 0x0,"type":2},{"bits":7,"name": {ame-enc-r1-bank-funct7},"type":2}]}
+....
+
+Description::
+Writes to each element of the M register group `md` the zero-based index of
+the row containing that element.  With `N = sqrt(AME_NELEM)`, every
+element of row `i` receives the value `i`, for `0 <= i < N`.
++
+For each row `i` and column `j`:
++
+  `md[i,j] = i`
++
+The index value is represented in the destination datatype `Md[md]`.  The
+destination datatype must be a supported *integer* datatype in which the
+largest index `N-1` is exactly representable; otherwise `amestatus.UN` is
+set and no register is written.
++
+Together with `<<ame:doc:inst:mcolid_ew,mcolid.ew>>`, this instruction forms
+the index group of the 1-dimensional elementwise instructions, typically
+used to materialize coordinate operands for gather, scatter, and predication
+sequences.
+
+NumPy Equivalent::
+[source,python]
+----
+md[:,:] = np.arange(N)[:,np.newaxis]
+----
+
+Decode Variables::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<5> md = $encoding[11:7];
+----
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+Bits<32> dest_dtype = Md[md];
+if pass:[(]!<<ame:doc:func:ame_op_supported,ame_op_supported>>pass:[(]AmeOperation::ROWID1D, dest_dtype, dest_dtype, dest_dtype)) {
+  CSR[<<ame:doc:csr:amestatus,amestatus>>].<<ame:doc:csr_field:amestatus:UN,UN>> = 1;
+} else {
+  U32 dest_element_size = <<ame:doc:func:ame_dtype_val_to_size,ame_dtype_val_to_size>>pass:[(]dest_dtype);
+  U32 dest_nregs = dest_element_size / AME_UNIT_DATATYPE_SIZE;
+  if pass:[(]dest_nregs == 0) {
+    dest_nregs = 1;
+  }
+  if pass:[(]AME_NUM_M_REGS == 16) {
+    if pass:[(]md >= 16) {
+      <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+    }
+  }
+  if pass:[(](md % dest_nregs) != 0) {
+    <<ame:doc:func:raise,raise>>pass:[(]ExceptionCode::IllegalInstruction, <<ame:doc:func:mode,mode>>pass:[(]), $encoding);
+  }
+  U32 N = <<ame:doc:func:sqrt,sqrt>>pass:[(]AME_NELEM);
+  U32 dest_nelements = (dest_nregs * AME_MATRIX_REGISTER_SIZE) / dest_element_size;
+  for pass:[(]U32 e = 0; e < dest_nelements; e++) {
+    U32 i = (e / N) % N;
+    Bits<AME_MAX_DTYPE_SIZE> id_value = <<ame:doc:func:ame_op,ame_op>>pass:[(]AmeOperation::ROWID1D, dest_dtype, i, dest_dtype, 0, dest_dtype);
+    <<ame:doc:func:ame_stage_m_element_write,ame_stage_m_element_write>>pass:[(]md, dest_dtype, e, id_value);
   }
 }
 ----
@@ -11602,7 +12680,7 @@ This encoding is provisional and is not a final RISC-V allocation.
 +
 [wavedrom, ,svg,subs='attributes',width="100%"]
 ....
-{"reg":[{"bits":7,"name": 0x2b,"type":2},{"bits":5,"name": "ms1","type":4},{"bits":3,"name": {ame-enc-funct3},"type":2},{"bits":5,"name": "xs1","type":4},{"bits":5,"name": "xs2","type":4},{"bits":7,"name": 0x53,"type":2}]}
+{"reg":[{"bits":7,"name": 0x2b,"type":2},{"bits":5,"name": "ms1","type":4},{"bits":3,"name": {ame-enc-funct3},"type":2},{"bits":5,"name": "xs1","type":4},{"bits":5,"name": "xs2","type":4},{"bits":7,"name": 0x56,"type":2}]}
 ....
 
 Description::
@@ -11695,7 +12773,7 @@ This encoding is provisional and is not a final RISC-V allocation.
 +
 [wavedrom, ,svg,subs='attributes',width="100%"]
 ....
-{"reg":[{"bits":7,"name": 0x2b,"type":2},{"bits":5,"name": "ms1","type":4},{"bits":3,"name": {ame-enc-funct3},"type":2},{"bits":5,"name": "xs1","type":4},{"bits":5,"name": "xs2","type":4},{"bits":7,"name": 0x54,"type":2}]}
+{"reg":[{"bits":7,"name": 0x2b,"type":2},{"bits":5,"name": "ms1","type":4},{"bits":3,"name": {ame-enc-funct3},"type":2},{"bits":5,"name": "xs1","type":4},{"bits":5,"name": "xs2","type":4},{"bits":7,"name": 0x57,"type":2}]}
 ....
 
 Description::

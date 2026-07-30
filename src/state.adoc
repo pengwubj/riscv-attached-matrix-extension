@@ -104,7 +104,7 @@ The encoding format of `Ad` datatypes is identical to the format for `Md`, and i
 
 === Control and status registers (CSRs)
 
-AME adds five CSRs.
+AME adds seven CSRs.
 
 The addresses below are provisional allocations in the corresponding
 user-level custom read/write and read-only CSR ranges.  A future ratified
@@ -129,15 +129,23 @@ version may assign different standard CSR addresses.
 | `CC3`
 | Ownership of the AME backend
 
+| <<ame:doc:csr:mfflags,mfflags>>
+| `CC4`
+| Accrued AME floating-point exception flags
+
+| <<ame:doc:csr:mxsat,mxsat>>
+| `CC5`
+| AME fixed-point saturation flag
+
 | <<ame:doc:csr:amestatus,amestatus>>
 | `800`
 | Status of the AME extension
 
 |===
 
-`ame_scalar_dtype` and `amestatus` are backend context state. `amenlen` and
-`ameudsz` report implementation capabilities. `ameown` reports ownership and
-is not part of the backend context state.
+`ame_scalar_dtype`, `mfflags`, `mxsat`, and `amestatus` are backend context
+state. `amenlen` and `ameudsz` report implementation capabilities. `ameown`
+reports ownership and is not part of the backend context state.
 
 ==== ameown
 
@@ -240,6 +248,73 @@ without hardcoding any implementation-specific constant.
 | VALUE
 | `XLEN-1:0`
 | Unit datatype size (AME_UNIT_DATATYPE_SIZE) in bits
+
+|===
+
+==== mfflags
+
+`mfflags` holds the accrued floating-point exception flags raised by AME
+floating-point operations.  The low 5 bits have the same meaning as the
+`fflags` CSR of the RISC-V F extension.  An AME floating-point operation that
+raises an exceptional condition sets the corresponding flag bits; flags
+accrue (are never cleared by hardware) until software clears them by writing
+the CSR.  Flag updates from an executing instruction are staged and commit
+atomically with the instruction's destination writes; an instruction that
+raises a synchronous exception does not update `mfflags`.  Reserved bits are
+WPRI and read as zero.
+
+The CSR resets to zero.  It is hart state and must be saved and restored with
+the AME state when software changes execution context.  AME operations do not
+modify the `fflags` CSR of the F extension.
+
+|===
+| Field | Location | Description
+
+| NV
+| `4`
+| Invalid operation
+
+| DZ
+| `3`
+| Divide by zero
+
+| OF
+| `2`
+| Overflow
+
+| UF
+| `1`
+| Underflow
+
+| NX
+| `0`
+| Inexact
+
+|===
+
+==== mxsat
+
+`mxsat` reports fixed-point saturation from AME integer operations.  Bit 0 is
+the sticky saturation flag `SAT`.  `SAT` is set only when an integer
+operation whose destination datatype has `Saturation=1` clamps (saturates) an
+out-of-range result to the destination range; operations that do not saturate
+their output leave `mxsat` unchanged.  Destinations with `Saturation=0` never
+update `mxsat`.  `SAT` remains set until software clears it by writing the
+CSR.  Flag updates from an executing instruction are staged and commit
+atomically with the instruction's destination writes; an instruction that
+raises a synchronous exception does not update `mxsat`.  Reserved bits are
+WPRI and read as zero.
+
+The CSR resets to zero.  It is hart state and must be saved and restored with
+the AME state when software changes execution context.
+
+|===
+| Field | Location | Description
+
+| SAT
+| `0`
+| Fixed-point saturation flag.  Set when a saturating integer operation
+clamps its output to the destination datatype's range.
 
 |===
 

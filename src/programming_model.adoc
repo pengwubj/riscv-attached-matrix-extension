@@ -332,11 +332,15 @@ snapshot observed by later pseudocode statements.
 [#norm:ame_atomic_register_writeback]#For register-only AME instructions, all
 destination `M`, `Md`, `Acc`, and `Ad` writes are staged and become visible
 together only after every operand, datatype, alignment, bounds, and index check
-has completed successfully.#
+has completed successfully.# Accrued status-flag updates to `mfflags` and
+`mxsat` are staged in the same way and commit together with the destination
+writes.
 
 [#norm:ame_register_exception_atomicity]#If a register-only AME instruction
 raises a synchronous exception, none of its staged destination writes commit;
-only architectural trap state written by exception handling may change.# An
+only architectural trap state written by exception handling may change.# Such
+an instruction likewise commits no staged `mfflags` or `mxsat`
+update.  An
 unsupported datatype or operation is not a synchronous exception: it sets
 `amestatus.UN` and returns without committing any destination write, as
 described in <<datatypes>>.
@@ -874,6 +878,9 @@ AME permutation operations swizzle data within a single square.
 [cols="1,2,3",options="header"]
 |===
 | Instruction | Operation | Description
+| <<ame:doc:inst:mcolbcast_ew_x,mcolbcast.ew.x>>
+| `D[i,j] = A[i,c]`
+| Broadcast one selected column to all columns
 | <<ame:doc:inst:mcolunzip_ew,mcolunzip.ew>>
 | `D[i,j] = A[i,2j] +
  D[i, N/2+j] = A[i,2j+1]`
@@ -908,6 +915,9 @@ AME permutation operations swizzle data within a single square.
 | <<ame:doc:inst:mcolshift_ew_x,mcolshift.ew.x>>
 | `D[i,j] = A[i, j+c]`, with `zero(Md[md])` fill
 | Elementwise column shift by scalar offset
+| <<ame:doc:inst:mrowbcast_ew_x,mrowbcast.ew.x>>
+| `D[i,j] = A[c,j]`
+| Broadcast one selected row to all rows
 | <<ame:doc:inst:mrowgather_ew,mrowgather.ew>>
 | `D[i,j] = A[B[i,j],j]`
 | Elementwise row gather
@@ -927,6 +937,9 @@ In all three cases, the source and destination datatypes must match; if they dif
 typically used to initialize an accumulator before a matrix multiply sequence.
 `<<ame:doc:inst:mzero_2d_m,mzero.2d.m>>` writes zero in the configured datatype to every logical
 element of an `M` register group, including packed element positions.
+`<<ame:doc:inst:mrowid_ew,mrowid.ew>>` and `<<ame:doc:inst:mcolid_ew,mcolid.ew>>` form the index
+group of the 1-dimensional elementwise instructions: they write the zero-based row or column
+index, represented in the configured datatype, to every logical element of an `M` register group.
 
 [cols="1,2,3",options="header"]
 |===
@@ -946,6 +959,12 @@ element of an `M` register group, including packed element positions.
 | <<ame:doc:inst:mzero_2d_m,mzero.2d.m>>
 | `D[i] = zero(Md[md])`
 | Clear every logical element of an M register group
+| <<ame:doc:inst:mrowid_ew,mrowid.ew>>
+| `D[i,j] = i`
+| Write the zero-based row index to every element
+| <<ame:doc:inst:mcolid_ew,mcolid.ew>>
+| `D[i,j] = j`
+| Write the zero-based column index to every element
 | <<ame:doc:inst:mpack_ew_x,mpack.ew.x>>
 | `D[k] = convert(A)`; preserve all `D[n]` for `n != k`
 | Convert and insert one non-packed square into packed slot `k = X[xs1]`
@@ -970,7 +989,7 @@ register for it.
 
 ===== Scalar ingress and data scalar operands
 
-`mmov.m.x` is the explicit scalar ingress instruction. It interprets an X-register
+`mbcast.m.x` is the explicit scalar ingress instruction. It interprets an X-register
 bit pattern using a datatype encoding supplied in another X register, converts the
 value to the destination `Md` datatype with `CONV1D`, and broadcasts the converted
 value to every logical element of the destination M operand.
@@ -987,9 +1006,35 @@ integer values defined by their instruction. They do not read
 [cols="1,2,3",options="header"]
 |===
 | Instruction | Operation | Description
-| <<ame:doc:inst:mmov_m_x,mmov.m.x>>
+| <<ame:doc:inst:mbcast_m_x,mbcast.m.x>>
 | `D[i] = CONV1D(X[xs1], X[xtyp], Md[md])`
 | Convert one X scalar and broadcast it to an M operand
+|===
+
+===== Debug scalar element moves
+
+The `mmove` family provides single-element moves between an X register and a
+fixed position inside one M register, intended for debugging.  Each
+instruction defines its own element size (8, 16, 32, or 64 bits) and accesses
+the register through the row-major layout transformation, viewed as `N` rows
+of `row_elements` elements of that size; it uses neither
+`CSR[ame_scalar_dtype]` nor the register datatype in `Md`.
+
+[cols="1,2,3",options="header"]
+|===
+| Instruction | Operation | Description
+| <<ame:doc:inst:mmove8_m_x,mmove8.m.x>> /
+  <<ame:doc:inst:mmove16_m_x,mmove16.m.x>> /
+  <<ame:doc:inst:mmove32_m_x,mmove32.m.x>> /
+  <<ame:doc:inst:mmove64_m_x,mmove64.m.x>>
+| `D.rm[pos] = X[xs2]`
+| Move one 8/16/32/64-bit scalar into an M register position
+| <<ame:doc:inst:mmove8_x_m,mmove8.x.m>> /
+  <<ame:doc:inst:mmove16_x_m,mmove16.x.m>> /
+  <<ame:doc:inst:mmove32_x_m,mmove32.x.m>> /
+  <<ame:doc:inst:mmove64_x_m,mmove64.x.m>>
+| `X[xd] = zext(A.rm[pos])`
+| Move one 8/16/32/64-bit element from an M register position to an X register
 |===
 
 ==== Load and store
