@@ -15,7 +15,11 @@ end
 entries = []
 File.read(instructions_path).scan(/^=== `([^`]+)`\n(.*?)(?=^=== `|\z)/m) do |name, section|
   diagram = section.lines.find { |line| line.start_with?('{"reg":') }
-  abort "#{name} has no WaveDrom encoding" unless diagram
+  unless diagram
+    next if section.include?("This specification does not assign an instruction encoding.")
+
+    abort "#{name} has no WaveDrom encoding"
+  end
 
   mnemonic = section[/Mnemonic::\n`([^`]+)`/, 1]
   abort "#{name} has no mnemonic" unless mnemonic

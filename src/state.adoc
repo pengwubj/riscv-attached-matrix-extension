@@ -2,7 +2,7 @@
 == AME State
 :imagesdir: ../images
 
-To each hart, AME adds
+An acquired AME backend provides the current software execution context with
 
 * <<ame:doc:param:AME_NUM_M_REGS,AME_NUM_M_REGS>> general-purpose matrix registers (`M`)
 * <<ame:doc:param:AME_NUM_M_REGS,AME_NUM_M_REGS>> datatype registers for the general-purpose registers (`Md`)
@@ -104,7 +104,7 @@ The encoding format of `Ad` datatypes is identical to the format for `Md`, and i
 
 === Control and status registers (CSRs)
 
-AME adds four CSRs.
+AME adds five CSRs.
 
 The addresses below are provisional allocations in the corresponding
 user-level custom read/write and read-only CSR ranges.  A future ratified
@@ -125,11 +125,44 @@ version may assign different standard CSR addresses.
 | `CC2`
 | Datatype of data scalar operands supplied in `X` registers
 
+| <<ame:doc:csr:ameown,ameown>>
+| `CC3`
+| Ownership of the AME backend
+
 | <<ame:doc:csr:amestatus,amestatus>>
 | `800`
 | Status of the AME extension
 
 |===
+
+`ame_scalar_dtype` and `amestatus` are backend context state. `amenlen` and
+`ameudsz` report implementation capabilities. `ameown` reports ownership and
+is not part of the backend context state.
+
+==== ameown
+
+`ameown` is a read-only CSR that reports whether the current software execution
+context owns the entire AME backend. It may be read regardless of `MS` or
+ownership. Any CSR instruction that attempts to write `ameown` raises an
+illegal-instruction exception.
+
+|===
+| Field | Location | Description
+
+| OWNED
+| `0`
+| One when the current context owns the backend; zero otherwise
+
+| RESERVED
+| `XLEN-1:1`
+| Reads as zero
+
+|===
+
+`ameown.OWNED` is set when `ame.acquire` newly grants ownership and cleared by
+`ame.release`. A failed acquire does not change it. It resets to zero.
+Software records whether AME state was saved across a context switch but does
+not restore `ameown` directly.
 
 ==== ame_scalar_dtype
 
@@ -145,8 +178,8 @@ This CSR does not apply to fixed-type control operands.  Shift amounts,
 indices, offsets, and other instruction-defined control values retain their
 fixed integer semantics and do not read this CSR.
 
-The CSR resets to zero.  It is hart state and must be saved and restored with
-the AME state when software changes execution context.
+The CSR resets to zero. It is backend context state and must be saved and
+restored with the AME state when software changes execution context.
 
 |===
 | Field | Location | Description
@@ -212,7 +245,8 @@ without hardcoding any implementation-specific constant.
 
 ==== amestatus
 
-`amestatus` reports sticky AME execution status.  It resets to zero.  Software
+`amestatus` is backend context state and reports sticky AME execution status.
+It resets to zero. Software
 clears a reported condition by writing zero to the corresponding bit; writing
 one leaves that bit set.  Reserved bits are WPRI and read as zero.
 

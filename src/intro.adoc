@@ -11,7 +11,9 @@ Isolated::
 *  AME is designed to work well on tensor codes regardless of whether the host hart implements RISC-V Vector (RVV). Implementing RVV is not a prerequisite of AME. Frequently moving state between RVV and AME may degrade performance on some implementations.
 
 Detachable::
-*  AME is designed to allow harts to physically share an AME execution unit, and includes features to manage resource contention. Sharing execution units is an option, and many implementations may choose dedicated units.
+*  AME allows harts to share an AME backend and provides explicit ownership
+   management; see <<shared-ame-backend>>. Implementations may instead provide
+   dedicated backends.
 
 
 ===  Comparison to other RISC-V matrix extensions
@@ -41,7 +43,6 @@ h| Memory model | Weaker than RVWMO | ? | RVWMO
 Open TODO items:
 
 * Formal memory model definition
-* State management for shared AME engines
 * menvcfg options
 * Decide whether prefix and reduction operations support widening source-to-destination
   datatype tuples. If widening is supported, define the accumulator datatype, initial

@@ -205,6 +205,9 @@ implementation-defined.
 
 The AME specification represents a large state space of possible datatypes and operations.
 
+The probe sequences below assume that `MS` is enabled and the current context
+owns the AME backend.
+
 Implementations are expected to support a small fraction of the possible space.
 Because of this, AME includes a discovery mechanism for software to determine which
 datatypes, conversions, and operations are supported.

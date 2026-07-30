@@ -18,6 +18,10 @@ amestatus::
 ameudsz::
   See the RISC-V Privileged Specification for details on the `ameudsz` CSR.
 
+[#ame:doc:csr:ameown]
+ameown::
+  See <<_ameown>> for details on the `ameown` CSR.
+
 [#ame:doc:csr:ame_scalar_dtype]
 ame_scalar_dtype::
   See the RISC-V Privileged Specification for details on the `ame_scalar_dtype` CSR.
@@ -155,6 +159,10 @@ vstvec::
 [#ame:doc:csr_field:amestatus:UN]
 amestatus.UN::
   See the RISC-V Privileged Specification for details on the `amestatus.UN` field.
+
+[#ame:doc:csr_field:ameown:OWNED]
+ameown.OWNED::
+  See <<_ameown>> for details on the `ameown.OWNED` field.
 
 [#ame:doc:csr_field:henvcfg:ADUE]
 henvcfg.ADUE::

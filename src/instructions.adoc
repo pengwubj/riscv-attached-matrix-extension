@@ -6,7 +6,7 @@
 
 
 
-AME defines *122* instructions.
+AME defines *124* instructions.
 
 [IMPORTANT]
 ====
@@ -19,9 +19,25 @@ block shows a one-square loop or direct per-register indexing, the common rules
 are normative and supply the complete behavior for packed and wide datatypes;
 the shorthand does not restrict execution to one square or permit partial
 register-group access.
+
+Before any AME instruction other than `ame.acquire` or `ame.release` executes
+its `Operation` block, the implementation performs
+`<<ame:doc:func:ame_check_state_access,ame_check_state_access>>`. This check has
+priority over all instruction-specific validation.
 ====
 
 include::instruction-encoding-allocations.adoc[]
+
+Resource Management::
+[cols="1,2",%unbreakable]
+!===
+| Mnemonic | Name
+
+a| `ame.acquire xd, xs`
+| <<ame:doc:inst:ame_acquire,Acquire the AME backend>>
+a| `ame.release`
+| <<ame:doc:inst:ame_release,Release the AME backend>>
+!===
 
 
 Datatype Management::
@@ -344,6 +360,168 @@ a| `mreducemin.col md, ms1`
 a| `mreducemin.row md, ms1`
 | <<ame:doc:inst:mreducemin_row,Elementwise row reduce (min)>>
 !===
+
+
+<<<
+
+[#ame:doc:inst:ame_acquire]
+=== `ame.acquire`
+
+Synopsis::
+Acquire the entire AME backend
+
+Mnemonic::
+`ame.acquire xd, xs`
+
+Encoding::
+This specification does not assign an instruction encoding.
+
+Description::
+`ame.acquire` atomically requests the entire backend. `xs` contains an
+acquisition descriptor and `xd` receives an acquisition response.
++
+The descriptor has the following layout:
++
+[cols="1,1,3",options="header"]
+|===
+| Field | Location | Description
+
+| WAIT_MODE
+| `1:0`
+| Waiting policy
+
+| TIMEOUT_CLASS
+| `5:2`
+| Bounded-wait class
+
+| RESERVED
+| `XLEN-1:6`
+| Must be zero
+|===
++
+`WAIT_MODE=0b00` is TRY and does not wait.
+`WAIT_MODE=0b01` is BOUNDED_WAIT and may wait for a finite interval.
+The other encodings are reserved. `TIMEOUT_CLASS` is ignored for TRY. For
+BOUNDED_WAIT, `0x0`, `0x1`, `0x2`, and `0x3` select SHORT, MEDIUM, LONG, and
+VERY_LONG; `0xF` is implementation-defined; all other values are reserved.
+The duration of each class is implementation-defined, but every bounded wait
+must be finite.
++
+The response has the following layout:
++
+[cols="1,1,3",options="header"]
+|===
+| Field | Location | Description
+
+| SUCCESS
+| `0`
+| One on success; zero on failure
+
+| STATUS
+| `7:1`
+| Acquisition status
+
+| RESERVED
+| `XLEN-1:8`
+| Zero
+|===
++
+[cols="1,2,1,4",options="header",%unbreakable]
+|===
+| STATUS | Name | SUCCESS | Description
+
+| `0x00`
+| GRANTED
+| 1
+| Granted or already owned
+
+| `0x01`
+| BUSY
+| 0
+| The backend is not currently available
+
+| `0x02`
+| UNSUPPORTED
+| 0
+| No AME backend is accessible
+
+| `0x03`
+| DISABLED
+| 0
+| Disabled by `MS` or configuration
+
+| `0x04`
+| BAD_DESC
+| 0
+| The descriptor is invalid
+
+| `0x05`
+| TIMEOUT
+| 0
+| A bounded wait expired
+
+| `0x06`
+| INTERRUPTED
+| 0
+| Wait interrupted by an interrupt or trap
+
+| `0x07`
+| DENIED
+| 0
+| Denied by platform policy
+
+| `0x08-0x7E`
+| RESERVED
+| -
+| Reserved
+
+| `0x7F`
+| IMPL_DEFINED
+| Impl.
+| Implementation-defined result
+|===
++
+An invalid descriptor returns BAD_DESC, and disabled AME returns DISABLED.
+After these checks, a request from the current owner is a no-op success that
+preserves the bound state and `MS`. Otherwise, GRANTED binds architectural
+initial state, sets `ameown.OWNED` to one, and sets every applicable `MS` field
+to Initial as one atomic architectural action.
++
+A failed acquire leaves the backend binding, `ameown`, and `MS` unchanged.
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+X[xd] = <<ame:doc:func:ame_acquire_backend,ame_acquire_backend>>pass:[(]X[xs]);
+----
+
+[#ame:doc:inst:ame_release]
+=== `ame.release`
+
+Synopsis::
+Release the entire AME backend
+
+Mnemonic::
+`ame.release`
+
+Encoding::
+This specification does not assign an instruction encoding.
+
+Description::
+`ame.release` is legal regardless of `MS`. If the current context owns the
+backend, the instruction stops accepting new AME operations from that context,
+completes its retired operations and earlier state-save stores, unbinds its
+backend state, and atomically releases ownership.
++
+After releasing an owned backend, `ameown.OWNED` is zero and every applicable
+non-Off `MS` field is Initial. If the current context does not own the backend,
+the instruction is a legal no-op that preserves `MS`.
+
+Operation::
+[source,idl,subs="specialchars,macros"]
+----
+<<ame:doc:func:ame_release_backend,ame_release_backend>>pass:[(]);
+----
 
 
 <<<

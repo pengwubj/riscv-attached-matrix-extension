@@ -9,13 +9,83 @@ They are executed in program order, though follow a weaker memory model than RVW
 AME memory operations are not guaranteed to appear in program order relative to non-AME memory operations
 without an ordering fence (see TODO).
 
-TODO: AME state enablement.
+[[ame-state-enablement]]
+==== AME state enablement
+
+AME adds a two-bit matrix context status field, `MS[1:0]`, to `mstatus`.
+The field is shadowed in `sstatus` and is defined analogously to the
+vector context status field, `VS[1:0]`.
+`MS` controls whether AME state is enabled for the current context and
+indicates whether that state might need to be saved during a context switch.
+
+.Encoding of the `MS[1:0]` status field
+[cols="1,1,4",options="header"]
+|===
+|Encoding |Status |Meaning
+
+|0
+|Off
+|AME state is disabled.
+
+|1
+|Initial
+|AME state is enabled and should have its architectural initial value.
+
+|2
+|Clean
+|AME state is enabled and matches the value most recently saved or restored
+for the current context.
+
+|3
+|Dirty
+|AME state is enabled and might have been modified since the last context save.
+|===
+
+When an applicable `MS` field is Off, an attempt to execute an AME instruction
+other than `ame.acquire` or `ame.release`, or to access an AME CSR other than
+`ameown`, raises an illegal-instruction exception. `ame.acquire` reports
+`DISABLED`; `ame.release` remains legal.
+The Initial, Clean, and Dirty encodings all enable AME execution.
+
+AME context state comprises the `M`, `Acc`, `Md`, and `Ad` register state and
+all writable AME CSR state.
+The architectural initial state has zero-valued `M` and `Acc` registers,
+uninitialized (`0`) `Md` and `Ad` descriptors, and reset-valued writable AME
+CSRs.
+Writing `MS` does not itself modify AME context state. An `ame.acquire` that
+newly grants ownership establishes the initial state before setting `MS` to
+Initial.
+
+When `MS` is Initial or Clean, executing an AME instruction other than
+`ame.acquire` or `ame.release` that changes, or might change, AME context state
+changes `MS` to Dirty.
+An implementation may conservatively change `MS` from Initial or Clean to
+Dirty even when no AME context state was changed.
+Precise dirty-state tracking is therefore an optional optimization for reducing
+context-switch overhead.
+
+If `MS` is Dirty, the corresponding `SD` summary bit is set.
+After saving AME context state, privileged software may set `MS` to Clean.
+On context restore, privileged software either restores a saved context and
+sets `MS` to Clean, or establishes the architectural initial state and sets
+`MS` to Initial.
+At reset, `MS` is Off.
+A hart that does not implement AME may make `MS` read-only zero.
+
+When the hypervisor extension is present, `vsstatus` contains an `MS[1:0]`
+field with the same encoding.
+When `V=1`, both `mstatus.MS` and `vsstatus.MS` are in effect.
+Ordinary AME execution is disabled if either field is Off, and an instruction
+other than `ame.acquire` or `ame.release` that changes, or might change, AME
+context state changes both fields to Dirty.
+If `vsstatus.MS` is Dirty, `vsstatus.SD` is set.
 
 === State
 
-Each hart implementing AME adds its own, private, AME registers and CSRs.
-AME instructions execute on the hart to access that state and control data transfer between AME
-registers and memory.
+An acquired AME backend binds its AME registers and writable context CSRs to
+the current software execution context. The state remains bound until
+`ame.release`; see <<shared-ame-backend>>. AME instructions access that bound
+state and control data transfer between AME registers and memory.
 
 .Register state and data movement paths for AME. The F/D and V extensions are _optional_ with AME. The only architectural datapath between vector (if present) and AME is through memory. The scalar datapath(s) is/are one-way. AME accumulator state can only be moved to/from the AME matrix registers.
 image::ame_state.svg[AME state and architectural datapaths]
@@ -361,6 +431,8 @@ the hart (from/to the X, F, or V register files).
 Informally, memory transfers involving AME state may appear out of program-order with respect to
 non-AME memory transfers in the hart.
 Ordering is restored with QQQ (fence.ame instruction, ldaq, strl).
+`ame.release` additionally completes earlier AME state-save stores before
+relinquishing ownership; see <<ame:doc:inst:ame_release,ame.release>>.
 
 === Operators
 

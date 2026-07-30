@@ -5,6 +5,22 @@ Accumulator Register File (ARF)::
   An <<ame:doc:param:AME_NUM_ACC_REGS,AME_NUM_ACC_REGS>>-entry register file of accumulator registers (`Acc`).
   The ARF registers hold the accumulator operand of matrix multiply instructions.
 
+AME backend::
+  The AME execution resources and architectural context state managed as one
+  ownership unit.
+
+backend ownership::
+  The exclusive binding between an AME backend and a software execution
+  context, reported by `ameown.OWNED`.
+
+effective `MS`::
+  The collective enablement state of every `MS` field applicable to the current
+  execution context. AME is enabled only when none is Off.
+
+software execution context::
+  The schedulable software state to which AME backend ownership and AME
+  architectural context state are bound.
+
 square::
   A 2-dimensional tensor (matrix) with an equal number of rows and columns.
   Squares are the fundamental unit of work in AME.
